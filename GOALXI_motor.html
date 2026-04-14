@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GOALXI — Motor de Puntos</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--g:#00FF88;--bg:#080C0A;--bg2:#0F140F;--card:#111811;--b2:#2A3E2A;--b1:#1E2E1E;--t1:#fff;--t2:#A0B8A0;--t3:#5A7A5A;--red:#FF4444;--yellow:#FFD700}
+body{background:var(--bg);font-family:'Barlow',sans-serif;color:var(--t1);padding:20px}
+h1{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:900;color:var(--g);margin-bottom:4px}
+.sub{font-size:13px;color:var(--t3);margin-bottom:24px}
+.card{background:var(--card);border:1px solid var(--b2);border-radius:16px;padding:20px;margin-bottom:16px}
+.card-title{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;margin-bottom:14px;color:var(--t2)}
+.status{display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--bg2);border-radius:12px;margin-bottom:8px}
+.dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.dot.green{background:var(--g);animation:blink 1s ease-in-out infinite}
+.dot.red{background:var(--red)}
+.dot.gray{background:var(--t3)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.status-txt{font-size:13px;font-weight:600}
+.status-time{font-size:11px;color:var(--t3);margin-left:auto}
+.btn{background:var(--g);color:#000;border:none;border-radius:12px;padding:12px 20px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;cursor:pointer;transition:all .2s;margin-right:8px;margin-bottom:8px}
+.btn:active{opacity:.85}
+.btn.secondary{background:var(--card);color:var(--t2);border:1px solid var(--b2)}
+.btn.red{background:#FF444420;color:var(--red);border:1px solid #FF444430}
+.event-list{display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto}
+.event-list::-webkit-scrollbar{width:0}
+.ev{display:flex;align-items:center;gap:10px;padding:10px 13px;background:var(--bg2);border-radius:11px;border-left:3px solid var(--b1);animation:slideIn .3s ease}
+@keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+.ev.gol{border-left-color:var(--g)}
+.ev.asist{border-left-color:#4488FF}
+.ev.tarj{border-left-color:var(--yellow)}
+.ev.roja{border-left-color:var(--red)}
+.ev-ic{font-size:18px;flex-shrink:0}
+.ev-info{flex:1}
+.ev-player{font-weight:700;font-size:13px}
+.ev-desc{font-size:11px;color:var(--t2)}
+.ev-pts{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;color:var(--g)}
+.ev-pts.neg{color:var(--red)}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.stat{background:var(--bg2);border-radius:12px;padding:12px;text-align:center}
+.stat-val{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:var(--g)}
+.stat-lbl{font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px}
+.match-card{background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:8px;border:1px solid var(--b1)}
+.match-teams{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.match-team{font-weight:700;font-size:13px}
+.match-score{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:var(--g)}
+.match-info{font-size:11px;color:var(--t3)}
+.match-status{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px}
+.match-status.live{background:#00FF8815;color:var(--g);border:1px solid #00FF8830}
+.match-status.fin{background:#4488FF15;color:#4488FF;border:1px solid #4488FF30}
+.match-status.pend{background:var(--b1);color:var(--t3)}
+.ranking-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg2);border-radius:11px;margin-bottom:6px}
+.rk-pos{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;width:24px;text-align:center;color:var(--t3)}
+.rk-pos.t1{color:var(--yellow)}
+.rk-pos.t2{color:#C0C0C0}
+.rk-pos.t3{color:#CD7F32}
+.rk-user{flex:1;font-weight:600;font-size:14px}
+.rk-pts{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:var(--g)}
+.log{background:#0A0A0A;border:1px solid var(--b1);border-radius:12px;padding:14px;font-family:monospace;font-size:12px;color:#00FF88;max-height:200px;overflow-y:auto;line-height:1.6}
+.log::-webkit-scrollbar{width:0}
+.log-line{margin-bottom:2px}
+.log-line.err{color:var(--red)}
+.log-line.warn{color:var(--yellow)}
+.log-line.info{color:var(--t3)}
+</style>
+</head>
+<body>
+
+<h1>⚽ GOALXI — Motor de Puntos</h1>
+<div class="sub">Panel de control · API-Football conectada</div>
+
+<!-- STATUS -->
+<div class="card">
+  <div class="card-title">Estado del sistema</div>
+  <div class="stats-grid">
+    <div class="stat"><div class="stat-val" id="st-eventos">0</div><div class="stat-lbl">Eventos procesados</div></div>
+    <div class="stat"><div class="stat-val" id="st-equipos">0</div><div class="stat-lbl">Equipos actualizados</div></div>
+    <div class="stat"><div class="stat-val" id="st-requests">0</div><div class="stat-lbl">Requests API usados</div></div>
+  </div>
+  <div class="status" id="status-api">
+    <div class="dot gray" id="dot-api"></div>
+    <div class="status-txt" id="txt-api">API-Football: No conectada</div>
+    <div class="status-time" id="time-api">—</div>
+  </div>
+  <div class="status" id="status-motor">
+    <div class="dot gray" id="dot-motor"></div>
+    <div class="status-txt" id="txt-motor">Motor: Detenido</div>
+    <div class="status-time" id="time-motor">—</div>
+  </div>
+  <div class="status">
+    <div class="dot green"></div>
+    <div class="status-txt">Supabase: Conectado</div>
+    <div class="status-time">xriizcvhcduftkwsporc</div>
+  </div>
+</div>
+
+<!-- CONTROLES -->
+<div class="card">
+  <div class="card-title">Controles</div>
+  <button class="btn" onclick="testAPI()">🔌 Probar API</button>
+  <button class="btn" onclick="fetchPartidos()">📡 Cargar partidos hoy</button>
+  <button class="btn" onclick="buscarIDsJugadores()">🔍 Buscar IDs jugadores</button>
+  <button class="btn" onclick="startMotor()">▶️ Iniciar motor</button>
+  <button class="btn red" onclick="stopMotor()">⏹ Detener motor</button>
+  <button class="btn secondary" onclick="simularEvento()">🎲 Simular evento</button>
+</div>
+
+<!-- PARTIDOS HOY -->
+<div class="card">
+  <div class="card-title">Partidos del torneo</div>
+  <div id="partidos-list"><div style="color:var(--t3);font-size:13px">Toca "Cargar partidos hoy" para ver los partidos activos.</div></div>
+</div>
+
+<!-- EVENTOS EN VIVO -->
+<div class="card">
+  <div class="card-title">Feed de eventos en vivo</div>
+  <div class="event-list" id="event-list">
+    <div style="color:var(--t3);font-size:13px;padding:8px">Los eventos aparecerán aquí cuando el motor esté activo...</div>
+  </div>
+</div>
+
+<!-- RANKING EN VIVO -->
+<div class="card">
+  <div class="card-title">Ranking en vivo</div>
+  <div id="ranking-list"><div style="color:var(--t3);font-size:13px">El ranking se actualizará automáticamente con cada evento.</div></div>
+</div>
+
+<!-- LOG -->
+<div class="card">
+  <div class="card-title">Log del sistema</div>
+  <div class="log" id="log"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ══════════════ CONFIG ══════════════
+const API_KEY = 'f6edbbc74bc6e8e3e72544b8ee1dde3b'
+const API_URL = 'https://v3.football.api-sports.io'
+const SB_URL  = 'https://xriizcvhcduftkwsporc.supabase.co'
+const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhyaWl6Y3ZoY2R1ZnRrd3Nwb3JjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjU3MDYsImV4cCI6MjA5MTM0MTcwNn0.j-w5S1be9VfutliUSwqI8vPSZDjYvkodq3f9CCoMynA'
+const sb = supabase.createClient(SB_URL, SB_KEY)
+
+// LIGAS DEL TORNEO
+const LIGAS = [
+  {id:140, nombre:'LaLiga',    temporada:2024},
+  {id:262, nombre:'Liga MX',   temporada:2024},
+  {id:128, nombre:'Argentina', temporada:2024},
+  {id:71,  nombre:'Brasil',    temporada:2024},
+]
+
+// SISTEMA DE PUNTOS
+const PUNTOS = {
+  participacion:   2,
+  min60:           1,
+  resultado_ganar: 1,
+  resultado_perder:-1,
+  gol: {DEL:5, MED:6, DEF:8, POR:10},
+  asistencia: {DEL:3, MED:4, DEF:5, POR:3},
+  clean_sheet: {POR:5, DEF:4},
+  atajadas_4:  2,
+  penal_atajado: 5,
+  amarilla:   -1,
+  roja:       -3,
+  doblete:     2,
+  hat_trick:   5,
+  mvp:         3,
+  dt_ganar:    5,
+  dt_empatar:  2,
+  dt_perder:  -2,
+}
+
+// ESTADO
+let motorActivo = false
+let motorInterval = null
+let partidosActivos = []
+let eventosContador = 0
+let equiposActualizados = 0
+let requestsUsados = 0
+let golcsPorJugador = {}
+
+// ══════════════ API FOOTBALL ══════════════
+async function apiCall(endpoint) {
+  try {
+    const res = await fetch(API_URL + endpoint, {
+      headers: { 'x-apisports-key': API_KEY }
+    })
+    requestsUsados++
+    document.getElementById('st-requests').textContent = requestsUsados
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const data = await res.json()
+    return data
+  } catch(e) {
+    log('Error API: ' + e.message, 'err')
+    return null
+  }
+}
+
+// TEST API
+async function testAPI() {
+  log('Probando conexión con API-Football...')
+  setStatus('api', 'gray', 'Conectando...')
+  
+  const data = await apiCall('/status')
+  if (!data) {
+    setStatus('api', 'red', 'API-Football: Error de conexión')
+    return
+  }
+  
+  const plan = data.response?.subscription?.plan || 'Free'
+  const remaining = data.response?.requests?.current || 0
+  const limit = data.response?.requests?.limit_day || 100
+  
+  setStatus('api', 'green', 'API-Football: Conectada · ' + plan + ' · ' + remaining + '/' + limit + ' requests')
+  log('✅ API conectada. Plan: ' + plan, 'info')
+  log('Requests hoy: ' + remaining + ' / ' + limit, 'info')
+}
+
+// CARGAR PARTIDOS HOY
+async function fetchPartidos() {
+  log('Cargando partidos de hoy...')
+  const hoy = new Date().toISOString().split('T')[0]
+  const container = document.getElementById('partidos-list')
+  container.innerHTML = '<div style="color:var(--t3);font-size:13px">Cargando...</div>'
+  
+  partidosActivos = []
+  let totalPartidos = []
+
+  for (const liga of LIGAS) {
+    const data = await apiCall('/fixtures?league=' + liga.id + '&season=' + liga.temporada + '&date=' + hoy)
+    if (!data || !data.response) continue
+    
+    const partidos = data.response
+    log('Liga ' + liga.nombre + ': ' + partidos.length + ' partidos hoy')
+    
+    partidos.forEach(function(p) {
+      totalPartidos.push({
+        id: p.fixture.id,
+        liga: liga.nombre,
+        local: p.teams.home.name,
+        visita: p.teams.away.name,
+        estado: p.fixture.status.short,
+        minuto: p.fixture.status.elapsed,
+        goles_local: p.goals.home || 0,
+        goles_visita: p.goals.away || 0,
+        fecha: p.fixture.date,
+      })
+      
+      // Solo agregar partidos en vivo o de hoy al array activo
+      if (['1H','HT','2H','ET','BT','P','LIVE'].indexOf(p.fixture.status.short) !== -1) {
+        partidosActivos.push(p.fixture.id)
+      }
+    })
+  }
+
+  if (!totalPartidos.length) {
+    container.innerHTML = '<div style="color:var(--t3);font-size:13px">No hay partidos programados para hoy en las ligas del torneo.</div>'
+    log('Sin partidos hoy — usando modo simulación', 'warn')
+    return
+  }
+
+  renderPartidos(totalPartidos)
+  log('Total partidos encontrados: ' + totalPartidos.length)
+  log('Partidos en vivo: ' + partidosActivos.length)
+}
+
+function renderPartidos(partidos) {
+  const container = document.getElementById('partidos-list')
+  container.innerHTML = ''
+  
+  partidos.forEach(function(p) {
+    const div = document.createElement('div')
+    div.className = 'match-card'
+    
+    let statusHtml = ''
+    let statusClass = 'pend'
+    if (['1H','HT','2H','ET','P','LIVE'].indexOf(p.estado) !== -1) {
+      statusClass = 'live'
+      statusHtml = '<div class="match-status live"><span style="width:5px;height:5px;background:var(--g);border-radius:50%;display:inline-block"></span> EN VIVO ' + (p.minuto ? p.minuto + "'" : '') + '</div>'
+    } else if (p.estado === 'FT') {
+      statusHtml = '<div class="match-status fin">FINALIZADO</div>'
+    } else {
+      const hora = new Date(p.fecha).toLocaleTimeString('es-MX', {hour:'2-digit',minute:'2-digit'})
+      statusHtml = '<div class="match-status pend">' + hora + '</div>'
+    }
+
+    div.innerHTML = '<div class="match-teams"><div class="match-team">' + p.local + '</div><div class="match-score">' + p.goles_local + ' - ' + p.goles_visita + '</div><div class="match-team">' + p.visita + '</div></div><div class="match-info" style="display:flex;justify-content:space-between;align-items:center"><span>' + p.liga + ' · ID: ' + p.id + '</span>' + statusHtml + '</div>'
+    container.appendChild(div)
+  })
+}
+
+// ══════════════ MOTOR DE PUNTOS ══════════════
+async function startMotor() {
+  if (motorActivo) { log('Motor ya está activo', 'warn'); return }
+  
+  motorActivo = true
+  setStatus('motor', 'green', 'Motor activo · Actualizando cada 5 min')
+  log('▶️ Motor de puntos iniciado')
+  log('Intervalo: cada 5 minutos durante partidos en vivo')
+  
+  // Primera ejecución inmediata
+  await procesarEventos()
+  
+  // Luego cada 5 minutos
+  motorInterval = setInterval(async function() {
+    if (motorActivo) await procesarEventos()
+  }, 5 * 60 * 1000)
+}
+
+function stopMotor() {
+  motorActivo = false
+  if (motorInterval) { clearInterval(motorInterval); motorInterval = null }
+  setStatus('motor', 'gray', 'Motor detenido')
+  log('⏹ Motor detenido')
+}
+
+async function procesarEventos() {
+  log('🔄 Procesando eventos...')
+  setStatus('motor', 'green', 'Motor activo · Procesando...')
+  
+  // Si no hay partidos en vivo, buscarlos
+  if (!partidosActivos.length) {
+    await fetchPartidos()
+    if (!partidosActivos.length) {
+      log('Sin partidos en vivo ahora', 'info')
+      setStatus('motor', 'green', 'Motor activo · Esperando partidos...')
+      return
+    }
+  }
+  
+  // Procesar cada partido activo
+  for (const fixtureId of partidosActivos) {
+    await procesarPartido(fixtureId)
+  }
+  
+  // Actualizar ranking
+  await actualizarRanking()
+  
+  const hora = new Date().toLocaleTimeString('es-MX', {hour:'2-digit',minute:'2-digit',second:'2-digit'})
+  setStatus('motor', 'green', 'Motor activo · Última actualización: ' + hora)
+  document.getElementById('time-motor').textContent = hora
+}
+
+async function procesarPartido(fixtureId) {
+  const data = await apiCall('/fixtures/events?fixture=' + fixtureId)
+  if (!data || !data.response) return
+  
+  const eventos = data.response
+  log('Partido ' + fixtureId + ': ' + eventos.length + ' eventos encontrados')
+  
+  for (const ev of eventos) {
+    await procesarEvento(ev, fixtureId)
+  }
+}
+
+async function procesarEvento(ev, fixtureId) {
+  const tipo = ev.type
+  const detalle = ev.detail
+  const jugadorNombre = ev.player?.name || 'Desconocido'
+  const minuto = ev.time?.elapsed || 0
+  const equipo = ev.team?.name || ''
+  
+  let tipoGoalxi = null
+  let puntos = 0
+  let icono = '📋'
+  let clase = ''
+  
+  // CLASIFICAR EVENTO
+  if (tipo === 'Goal' && detalle !== 'Missed Penalty' && detalle !== 'Own Goal') {
+    tipoGoalxi = 'gol'
+    icono = '⚽'
+    clase = 'gol'
+    
+    // Buscar posición del jugador en nuestros datos
+    const pos = await getPosicionJugador(jugadorNombre)
+    puntos = PUNTOS.gol[pos] || PUNTOS.gol['MED']
+    
+    // Contar goles para doblete/hat-trick
+    if (!golcsPorJugador[jugadorNombre]) golcsPorJugador[jugadorNombre] = 0
+    golcsPorJugador[jugadorNombre]++
+    
+    if (golcsPorJugador[jugadorNombre] === 2) {
+      puntos += PUNTOS.doblete
+      log('🎉 DOBLETE de ' + jugadorNombre + ' +' + PUNTOS.doblete + ' bonus')
+    } else if (golcsPorJugador[jugadorNombre] === 3) {
+      puntos += PUNTOS.hat_trick
+      log('🎉 HAT-TRICK de ' + jugadorNombre + ' +' + PUNTOS.hat_trick + ' bonus')
+    }
+    
+  } else if (tipo === 'Goal' && detalle === 'Own Goal') {
+    tipoGoalxi = 'gol_propio'
+    icono = '😬'
+    puntos = -2
+    clase = 'roja'
+    
+  } else if (tipo === 'Card' && detalle === 'Yellow Card') {
+    tipoGoalxi = 'amarilla'
+    icono = '🟡'
+    clase = 'tarj'
+    puntos = PUNTOS.amarilla
+    
+  } else if (tipo === 'Card' && (detalle === 'Red Card' || detalle === 'Second Yellow card')) {
+    tipoGoalxi = 'roja'
+    icono = '🔴'
+    clase = 'roja'
+    puntos = PUNTOS.roja
+    
+  } else if (tipo === 'subst') {
+    // Sustitución — no genera puntos directamente
+    return
+  }
+  
+  if (!tipoGoalxi) return
+  
+  // Verificar si ya procesamos este evento
+  const{data:existe}=await sb.from('eventos_partido')
+    .select('id')
+    .eq('partido_id', fixtureId)
+    .eq('tipo', tipoGoalxi)
+    .eq('minuto', minuto)
+    .like('created_at', '%') // evitar duplicados
+    .limit(1)
+  
+  // Mostrar en feed
+  agregarEventoFeed(icono, jugadorNombre, equipo, tipoGoalxi, minuto, puntos, clase)
+  
+  // Guardar en Supabase y distribuir puntos
+  await distribuirPuntos(jugadorNombre, tipoGoalxi, puntos, fixtureId, minuto)
+  
+  eventosContador++
+  document.getElementById('st-eventos').textContent = eventosContador
+}
+
+async function getPosicionJugador(nombre) {
+  // Primero buscar en nuestra DB local
+  const{data}=await sb.from('jugadores').select('posicion').ilike('nombre', '%' + nombre.split(' ')[0] + '%').single()
+  return data?.posicion || 'MED'
+}
+
+async function distribuirPuntos(jugadorNombre, tipo, puntos, fixtureId, minuto) {
+  // Buscar jugador en DB
+  const{data:jugador, error:jErr}=await sb.from('jugadores')
+    .select('id,nombre').ilike('nombre','%'+jugadorNombre.split(' ')[0]+'%').maybeSingle()
+  if(jErr){log('Error buscando jugador: '+jErr.message,'err');return}
+  if(!jugador){log('⚠️ Jugador no encontrado: '+jugadorNombre,'warn');return}
+  log('🔍 Jugador encontrado: '+jugador.nombre+' (id:'+jugador.id+')')
+
+  // Guardar evento (ignorar duplicados)
+  await sb.from('eventos_partido').insert({
+    partido_id:fixtureId, jugador_id:jugador.id,
+    tipo:tipo, minuto:minuto, puntos:puntos, procesado:true
+  })
+
+  // Buscar slots del equipo con este jugador
+  const{data:slots,error:sErr}=await sb.from('equipo_jugadores')
+    .select('id,puntos,equipo_fantasy_id,equipos_fantasy(id,puntos_total,usuario_id)')
+    .eq('jugador_id',jugador.id)
+  if(sErr){log('Error buscando slots: '+sErr.message,'err');return}
+  if(!slots||!slots.length){log('⚠️ Ningún equipo tiene a '+jugador.nombre,'info');return}
+
+  log('✅ '+jugador.nombre+' en '+slots.length+' equipo(s)')
+
+  for(const slot of slots){
+    const ef=slot.equipos_fantasy
+    const puntosFinales=puntos
+    const nuevoPtsSlot=(slot.puntos||0)+puntosFinales
+
+    // Actualizar puntos del slot
+    const{error:uErr}=await sb.from('equipo_jugadores')
+      .update({puntos:nuevoPtsSlot}).eq('id',slot.id)
+    if(uErr){log('Error update slot: '+uErr.message,'err');continue}
+
+    // Recalcular total del equipo sumando todos sus slots
+    const{data:todosSlots}=await sb.from('equipo_jugadores')
+      .select('puntos').eq('equipo_fantasy_id',ef.id)
+    const nuevoTotal=(todosSlots||[]).reduce(function(s,r){return s+(r.puntos||0)},0)
+
+    const{error:efErr}=await sb.from('equipos_fantasy')
+      .update({puntos_total:nuevoTotal}).eq('id',ef.id)
+    if(efErr){log('Error update equipo: '+efErr.message,'err');continue}
+
+    equiposActualizados++
+    document.getElementById('st-equipos').textContent=equiposActualizados
+    log('⚡ +'+puntosFinales+' pts → equipo '+ef.id+' (total: '+nuevoTotal+')')
+  }
+
+  await recalcularPosiciones()
+}
+
+async function recalcularPosiciones(){
+  const{data:equipos}=await sb.from('equipos_fantasy')
+    .select('id,puntos_total').eq('torneo_id',1)
+    .order('puntos_total',{ascending:false})
+  if(!equipos)return
+  for(let i=0;i<equipos.length;i++){
+    await sb.from('equipos_fantasy').update({posicion_rank:i+1}).eq('id',equipos[i].id)
+  }
+}
+
+async function actualizarRanking() {
+  const{data,error}=await sb.from('equipos_fantasy')
+    .select('posicion_rank,puntos_total,usuario_id,usuarios(nombre,username)')
+    .eq('torneo_id',1)
+    .order('puntos_total',{ascending:false})
+    .limit(10)
+  if(error){log('Error ranking: '+error.message,'err');return}
+  if(!data||!data.length){
+    document.getElementById('ranking-list').innerHTML='<div style="color:var(--t3);font-size:13px">Sin equipos aún.</div>'
+    return
+  }
+  const container=document.getElementById('ranking-list')
+  container.innerHTML=''
+  data.forEach(function(eq,i){
+    const div=document.createElement('div')
+    div.className='ranking-item'
+    const posClass=i===0?'t1':i===1?'t2':i===2?'t3':''
+    const nom=eq.usuarios?.nombre||'Usuario'
+    const usr=eq.usuarios?.username||eq.usuario_id?.slice(0,8)||'—'
+    div.innerHTML='<div class="rk-pos '+posClass+'">'+(i+1)+'</div><div class="rk-user">'+nom+'<br><span style="font-size:11px;color:var(--t3)">@'+usr+'</span></div><div class="rk-pts">'+Math.floor(eq.puntos_total||0)+'</div>'
+    container.appendChild(div)
+  })
+}
+
+// ══════════════ SIMULACIÓN ══════════════
+const EVENTOS_SIM = [
+  {ic:'⚽',player:'Vinicius Jr.',team:'Real Madrid',tipo:'gol',min:23,pts:5,clase:'gol'},
+  {ic:'🎯',player:'Pedri',team:'Barcelona',tipo:'asistencia',min:23,pts:4,clase:'asist'},
+  {ic:'⚽',player:'Lewandowski',team:'Barcelona',tipo:'gol',min:41,pts:5,clase:'gol'},
+  {ic:'🧤',player:'Courtois',team:'Real Madrid',tipo:'atajadas_4',min:38,pts:2,clase:''},
+  {ic:'🟡',player:'Modric',team:'Real Madrid',tipo:'amarilla',min:29,pts:-1,clase:'tarj'},
+  {ic:'⚽',player:'Henry Martín',team:'América',tipo:'gol',min:67,pts:5,clase:'gol'},
+  {ic:'🔴',player:'Savić',team:'Atlético',tipo:'roja',min:78,pts:-3,clase:'roja'},
+  {ic:'⚽',player:'Raphinha',team:'Barcelona',tipo:'gol',min:55,pts:5,clase:'gol'},
+]
+
+let simIndex = 0
+
+async function simularEvento() {
+  const ev = EVENTOS_SIM[simIndex % EVENTOS_SIM.length]
+  simIndex++
+  
+  log('🎲 Simulando: ' + ev.player + ' - ' + ev.tipo)
+  agregarEventoFeed(ev.ic, ev.player, ev.team, ev.tipo, ev.min, ev.pts, ev.clase)
+  
+  // Intentar distribuir puntos reales si el jugador existe en DB
+  await distribuirPuntos(ev.player, ev.tipo, ev.pts, 99999, ev.min)
+  await actualizarRanking()
+  
+  eventosContador++
+  document.getElementById('st-eventos').textContent = eventosContador
+}
+
+// ══════════════ UI HELPERS ══════════════
+function agregarEventoFeed(ic, player, team, tipo, min, pts, clase) {
+  const container = document.getElementById('event-list')
+  
+  // Quitar mensaje inicial
+  if (container.children.length === 1 && container.children[0].style.padding) {
+    container.innerHTML = ''
+  }
+  
+  const div = document.createElement('div')
+  div.className = 'ev ' + (clase || '')
+  div.innerHTML = '<div class="ev-ic">' + ic + '</div><div class="ev-info"><div class="ev-player">' + player + '</div><div class="ev-desc">' + team + ' · ' + tipo + ' · min ' + min + "'</div></div><div class='ev-pts" + (pts<0?' neg':'') + "'>" + (pts>0?'+':'') + pts + '</div>'
+  
+  container.insertBefore(div, container.firstChild)
+  
+  // Max 20 eventos visibles
+  while (container.children.length > 20) {
+    container.removeChild(container.lastChild)
+  }
+}
+
+function setStatus(id, color, texto) {
+  document.getElementById('dot-' + id).className = 'dot ' + color
+  document.getElementById('txt-' + id).textContent = texto
+  document.getElementById('time-' + id).textContent = new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})
+}
+
+function log(msg, tipo) {
+  const container = document.getElementById('log')
+  const div = document.createElement('div')
+  div.className = 'log-line ' + (tipo||'')
+  const hora = new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
+  div.textContent = '[' + hora + '] ' + msg
+  container.appendChild(div)
+  container.scrollTop = container.scrollHeight
+}
+
+// BUSCAR IDs DE JUGADORES
+const JUGADORES_BUSCAR = [
+  {nm:'Vinicius Jr', team:541},      // Real Madrid id
+  {nm:'Lewandowski', team:529},      // Barcelona id
+  {nm:'Bellingham', team:541},
+  {nm:'Raphinha', team:529},
+  {nm:'Griezmann', team:530},        // Atletico id
+  {nm:'Pedri', team:529},
+  {nm:'Modric', team:541},
+  {nm:'Kroos', team:541},
+  {nm:'De Jong', team:529},
+  {nm:'Koke', team:530},
+  {nm:'Carvajal', team:541},
+  {nm:'Militao', team:541},
+  {nm:'Araujo', team:529},
+  {nm:'Jordi Alba', team:529},
+  {nm:'Savic', team:530},
+  {nm:'Courtois', team:541},
+  {nm:'Ter Stegen', team:529},
+  {nm:'Oblak', team:530},
+]
+
+async function buscarIDsJugadores(){
+  log('🔍 Buscando IDs de jugadores LaLiga...')
+  const resultados = []
+  for(const j of JUGADORES_BUSCAR){
+    try{
+      const data = await apiCall('/players?search='+encodeURIComponent(j.nm)+'&team='+j.team+'&season=2024')
+      if(data.response && data.response.length > 0){
+        const p = data.response[0].player
+        resultados.push({nm:p.name, id:p.id, photo:p.photo})
+        log('✅ '+p.name+' → ID: '+p.id)
+      } else {
+        log('⚠️ No encontrado: '+j.nm,'warn')
+      }
+    }catch(e){
+      log('Error: '+j.nm+' - '+e.message,'err')
+    }
+    // Pequeña pausa para no saturar la API
+    await new Promise(r=>setTimeout(r,300))
+  }
+  log('📋 RESULTADOS COMPLETOS:')
+  log(JSON.stringify(resultados.map(function(r){return r.nm+':'+r.id}).join(', ')))
+}
+
+// INIT
+log('Sistema GOALXI Motor v1.0 iniciado')
+log('Supabase: ' + SB_URL, 'info')
+log('API-Football: ' + API_URL, 'info')
+log('Listo. Toca "Probar API" para verificar conexión.')
+actualizarRanking()
+</script>
+</body>
+</html>
