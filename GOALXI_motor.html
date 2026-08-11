@@ -579,36 +579,20 @@ function log(msg, tipo) {
 
 // INIT
 // ══════════ CARGA JUGADORES DESDE API ══════════
-const EQUIPOS_CARGA = {
-  LaLiga: [
-    {id:541,nm:'Real Madrid'},{id:529,nm:'Barcelona'},{id:530,nm:'Atletico Madrid'},
-    {id:548,nm:'Real Sociedad'},{id:532,nm:'Valencia'},{id:533,nm:'Villarreal'},
-    {id:531,nm:'Athletic Bilbao'},{id:543,nm:'Real Betis'},{id:536,nm:'Sevilla'},
-    {id:546,nm:'Getafe'},{id:798,nm:'Rayo Vallecano'},{id:547,nm:'Girona'},
-    {id:538,nm:'Celta Vigo'},{id:534,nm:'Las Palmas'},{id:540,nm:'Espanol'},
-    {id:542,nm:'Alaves'},{id:724,nm:'Osasuna'},{id:545,nm:'Mallorca'},
-    {id:723,nm:'Leganes'},{id:728,nm:'Valladolid'},
-  ],
-  'Liga MX': [
-    {id:1195,nm:'América'},{id:1193,nm:'Chivas'},{id:1194,nm:'Rayados'},
-    {id:1197,nm:'Cruz Azul'},{id:1196,nm:'Tigres'},{id:1198,nm:'Pumas'},
-    {id:1199,nm:'Atlas'},{id:1200,nm:'León'},{id:1201,nm:'Toluca'},
-    {id:1202,nm:'Santos'},{id:1203,nm:'Tijuana'},{id:1204,nm:'Pachuca'},
-    {id:1205,nm:'Querétaro'},{id:1206,nm:'Necaxa'},{id:1207,nm:'Mazatlán'},
-    {id:1208,nm:'Juárez'},{id:2283,nm:'San Luis'},{id:1209,nm:'Puebla'},
-  ],
-  MLS: [
-    {id:4347,nm:'Inter Miami'},{id:1610,nm:'Nashville'},{id:1611,nm:'Columbus'},
-    {id:1612,nm:'New England'},{id:1613,nm:'NY Red Bulls'},{id:1614,nm:'NYCFC'},
-    {id:1615,nm:'LA Galaxy'},{id:1616,nm:'LAFC'},{id:1617,nm:'Seattle'},
-    {id:1618,nm:'Portland'},{id:1619,nm:'Toronto'},{id:1620,nm:'Montreal'},
-    {id:1621,nm:'Chicago'},{id:1622,nm:'Dallas'},{id:1623,nm:'Houston'},
-    {id:1624,nm:'Colorado'},{id:1625,nm:'Salt Lake'},{id:1626,nm:'San Jose'},
-    {id:1627,nm:'Vancouver'},{id:1628,nm:'Philadelphia'},{id:1629,nm:'Orlando'},
-    {id:1630,nm:'Atlanta'},{id:1631,nm:'Minnesota'},{id:1632,nm:'Cincinnati'},
-    {id:1633,nm:'DC United'},{id:1634,nm:'Austin'},{id:1635,nm:'Charlotte'},
-    {id:1636,nm:'St Louis'},
-  ]
+// IDs de ligas en API-Football
+const LIGAS_CONFIG = [
+  {id:140, nm:'LaLiga',  temporada:2025},
+  {id:262, nm:'Liga MX', temporada:2025},
+  {id:253, nm:'MLS',     temporada:2025},
+]
+
+// Función para obtener equipos directamente de la API
+async function getEquiposFromAPI(ligaId, temporada){
+  const data = await apiCall('/teams?league='+ligaId+'&season='+temporada)
+  if(!data||!data.response||!data.response.length) return []
+  return data.response.map(function(t){
+    return {id:t.team.id, nm:t.team.name}
+  })
 }
 
 function mapPos(pos){
@@ -636,16 +620,23 @@ async function cargarJugadoresAPI(){
   cargaActiva=true
   let totalCargados=0
   log('═══ INICIANDO CARGA DE JUGADORES ═══')
-  log('LaLiga + Liga MX + MLS — temporada 2025')
+  log('Obteniendo equipos desde la API — temporada 2025')
 
   // Limpiar jugadores anteriores
-  const{error:del1}=await sb.from('equipo_jugadores').delete().neq('id',0)
-  const{error:del2}=await sb.from('equipos_fantasy').delete().neq('id',0)
-  const{error:del3}=await sb.from('jugadores').delete().neq('id',0)
+  await sb.from('equipo_jugadores').delete().neq('id',0)
+  await sb.from('equipos_fantasy').delete().neq('id',0)
+  await sb.from('jugadores').delete().neq('id',0)
   log('🗑️ Tablas limpiadas')
 
-  for(const [liga,equipos] of Object.entries(EQUIPOS_CARGA)){
-    log('━━━ '+liga+' ('+equipos.length+' equipos) ━━━')
+  for(const liga of LIGAS_CONFIG){
+    log('━━━ '+liga.nm+' — obteniendo equipos...')
+    await new Promise(r=>setTimeout(r,1000))
+    const equipos = await getEquiposFromAPI(liga.id, liga.temporada)
+    if(!equipos.length){
+      log('⚠️ Sin equipos para '+liga.nm,'warn')
+      continue
+    }
+    log('✅ '+liga.nm+': '+equipos.length+' equipos encontrados')
     for(const eq of equipos){
       try{
         // Intentar temporada 2025 primero
@@ -677,7 +668,7 @@ async function cargarJugadoresAPI(){
                 nombre:p.player.name,
                 posicion:mapPos(stats.games.position),
                 equipo:eq.nm,
-                liga:liga,
+                liga:liga.nm,
                 precio:calcPrecio(rating),
                 rating:rating||75,
                 api_id:p.player.id,
