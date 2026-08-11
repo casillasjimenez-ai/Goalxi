@@ -105,6 +105,7 @@ h1{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:900;colo
   <button class="btn" onclick="startMotor()">▶️ Iniciar motor</button>
   <button class="btn red" onclick="stopMotor()">⏹ Detener motor</button>
   <button class="btn" onclick="cargarJugadoresAPI()">⬇️ Cargar jugadores desde API</button>
+  <button class="btn secondary" onclick="revisarBajas()">🔔 Revisar bajas y avisar</button>
   <button class="btn secondary" onclick="simularEvento()">🎲 Simular evento</button>
 </div>
 
@@ -714,6 +715,94 @@ async function cargarJugadoresAPI(){
   log('✅ CARGA COMPLETA: '+totalCargados+' jugadores guardados')
   log('═══════════════════════════')
   cargaActiva=false
+}
+
+// ══════════ REVISAR BAJAS Y NOTIFICAR ══════════
+// Detecta jugadores que ya no tienen minutos con su equipo actual esta
+// temporada, los marca inactivos (sin borrarlos) y avisa a los usuarios
+// que los tienen en su equipo fantasy.
+let revisionActiva=false
+
+async function revisarBajas(){
+  if(revisionActiva){log('Ya hay una revisión activa...','warn');return}
+  revisionActiva=true
+  let totalBajas=0
+  let totalNotificaciones=0
+  log('═══ REVISANDO BAJAS ═══')
+
+  // Traer todos los jugadores activos actualmente en la DB
+  const{data:jugadoresActuales}=await sb.from('jugadores').select('id,nombre,equipo,liga,api_id').eq('activo',true)
+  if(!jugadoresActuales||!jugadoresActuales.length){
+    log('No hay jugadores activos que revisar','warn')
+    revisionActiva=false
+    return
+  }
+
+  // Agrupar por equipo+liga para minimizar llamadas a la API
+  const porEquipo={}
+  jugadoresActuales.forEach(function(j){
+    const key=j.equipo+'|'+j.liga
+    if(!porEquipo[key])porEquipo[key]=[]
+    porEquipo[key].push(j)
+  })
+
+  for(const key in porEquipo){
+    const [nombreEquipo, nombreLiga] = key.split('|')
+    const ligaCfg = LIGAS_CONFIG.find(function(l){return l.nm===nombreLiga})
+    if(!ligaCfg){ continue }
+
+    // Necesitamos el team_id de la API para este equipo
+    const equiposApi = await getEquiposFromAPI(ligaCfg.id, ligaCfg.temporada)
+    const equipoApi = equiposApi.find(function(e){return e.nm===nombreEquipo})
+    if(!equipoApi){
+      log('⚠️ No encontré '+nombreEquipo+' en la API actual','warn')
+      continue
+    }
+
+    await new Promise(r=>setTimeout(r,500))
+    const statsData = await apiCall('/players?team='+equipoApi.id+'&season='+ligaCfg.temporada)
+    const idsConMinutos = new Set()
+    if(statsData&&statsData.response){
+      statsData.response.forEach(function(p){
+        const stats=(p.statistics||[]).find(function(s){
+          return s.team && s.team.id===equipoApi.id && s.games && (s.games.appearences||0)>0
+        })
+        if(stats) idsConMinutos.add(p.player.id)
+      })
+    }
+
+    for(const j of porEquipo[key]){
+      if(!idsConMinutos.has(j.api_id)){
+        // BAJA detectada
+        await sb.from('jugadores').update({activo:false}).eq('id',j.id)
+        totalBajas++
+        log('🔻 Baja detectada: '+j.nombre+' ('+j.equipo+')','warn')
+
+        // Buscar usuarios afectados
+        const{data:slots}=await sb.from('equipo_jugadores')
+          .select('equipos_fantasy!inner(usuario_id)')
+          .eq('jugador_id', j.id)
+
+        if(slots&&slots.length){
+          for(const slot of slots){
+            const usuarioId = slot.equipos_fantasy.usuario_id
+            await sb.from('notificaciones_usuario').insert({
+              usuario_id: usuarioId,
+              jugador_id: j.id,
+              mensaje: j.nombre+' ya no está activo en '+j.equipo+'. Debes sustituirlo en tu equipo.'
+            })
+            totalNotificaciones++
+          }
+        }
+      }
+    }
+    await new Promise(r=>setTimeout(r,2000))
+  }
+
+  log('═══════════════════════════')
+  log('✅ REVISIÓN COMPLETA: '+totalBajas+' bajas detectadas, '+totalNotificaciones+' notificaciones enviadas')
+  log('═══════════════════════════')
+  revisionActiva=false
 }
 
 log('Sistema GOALXI Motor v1.0 iniciado')
