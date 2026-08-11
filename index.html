@@ -1160,7 +1160,7 @@ const EQUIPO_TEAM_ID = {
 function getTeamLogo(j){
   const tid=EQUIPO_TEAM_ID[j.eq]
   if(!tid)return ''
-  return '<img src="https://media.api-sports.io/football/teams/'+tid+'.png" style="width:32px;height:32px;object-fit:contain" onerror="this.style.display=\'none\'">'
+  return '<img src="https://media.api-sports.io/football/teams/'+tid+'.png" style="width:42px;height:42px;object-fit:contain" onerror="this.style.display=\'none\'">'
 }
 
 function getPlayerImg(j){
@@ -1202,7 +1202,8 @@ function renderPlayers(){
     div.innerHTML='<div class="p-pic">'+getPlayerImg(j)+'</div>'
       +'<div class="p-info"><div class="p-nm">'+j.nm+'</div>'
       +'<div class="p-mt">'+j.eq+' · <b>'+j.pos+'</b> · '+j.liga+'</div></div>'
-      +'<div class="p-rt"><div class="p-price" style="display:flex;align-items:center;gap:5px;justify-content:flex-end">'+getTeamLogo(j)+j.p+'M</div>'
+      +'<div class="p-rt" style="display:flex;align-items:center;gap:10px">'+getTeamLogo(j)
+      +'<div><div class="p-price">'+j.p+'M</div>'
       +'<div class="p-rat">★ '+j.r+'</div>'
       +'<div class="'+(j.tr==='up'?'p-trend-up':'p-trend-dn')+'">'+(j.tr==='up'?'↑ forma':'↓ forma')+'</div></div>'
     c.appendChild(div)
