@@ -639,52 +639,38 @@ async function cargarJugadoresAPI(){
     log('✅ '+liga.nm+': '+equipos.length+' equipos encontrados')
     for(const eq of equipos){
       try{
-        // Intentar temporada 2025 primero
-        let data=await apiCall('/players?team='+eq.id+'&season=2025')
-        if(!data||!data.response||!data.response.length){
-          await new Promise(r=>setTimeout(r,2000))
-          data=await apiCall('/players?team='+eq.id+'&season=2024')
-        }
-        if(!data||!data.response||!data.response.length){
-          log('⚠️ '+eq.nm+': sin datos','warn')
+        // 1) Roster REAL y actual — /players/squads NO mezcla temporadas/préstamos
+        const squadData = await apiCall('/players/squads?team='+eq.id)
+        await new Promise(r=>setTimeout(r,500))
+
+        if(!squadData||!squadData.response||!squadData.response.length||!squadData.response[0].players||!squadData.response[0].players.length){
+          log('⚠️ '+eq.nm+': sin squad','warn')
         } else {
-          // Filtrar solo primer equipo: jugadores con posición definida
-          // y ordenar por minutos jugados para tomar los titulares
-          const jugadores=data.response
-            .filter(function(p){
+          // 2) Stats de temporada — SOLO para sacar el rating de los que YA sabemos que están en el squad
+          const statsData = await apiCall('/players?team='+eq.id+'&season=2025')
+          const ratingPorId = {}
+          if(statsData&&statsData.response){
+            statsData.response.forEach(function(p){
               const stats=p.statistics&&p.statistics[0]
-              const tienePos=stats&&stats.games&&stats.games.position
-              const nombreOk=p.player.name&&p.player.name.trim().length>2
-              // Excluir jugadores sin foto (generalmente son filiales)
-              const tieneFoto=p.player.photo&&p.player.photo.indexOf('no-photo')===-1
-              return tienePos&&nombreOk
-            })
-            .map(function(p){
-              const stats=p.statistics[0]
-              const rating=stats.games.rating?Math.round(parseFloat(stats.games.rating)*10):75
-              const minutos=stats.games.minutes||0
-              const apps=stats.games.appearences||0
-              return {
-                nombre:p.player.name,
-                posicion:mapPos(stats.games.position),
-                equipo:eq.nm,
-                liga:liga.nm,
-                precio:calcPrecio(rating),
-                rating:rating||75,
-                api_id:p.player.id,
-                foto_url:p.player.photo||null,
-                _minutos:minutos,
-                _apps:apps
+              if(stats&&stats.games&&stats.games.rating){
+                ratingPorId[p.player.id] = Math.round(parseFloat(stats.games.rating)*10)
               }
             })
-            // Ordenar por minutos jugados — los que más juegan son del primer equipo
-            .sort(function(a,b){return b._minutos-a._minutos})
-            // Tomar máximo 22 jugadores por equipo (plantilla real)
-            .slice(0,22)
-            .map(function(j){
-              // Limpiar campos internos
-              delete j._minutos; delete j._apps; return j
-            })
+          }
+
+          const jugadores = squadData.response[0].players.map(function(p){
+            const rating = ratingPorId[p.id] || 75
+            return {
+              nombre: p.name,
+              posicion: mapPos(p.position),
+              equipo: eq.nm,
+              liga: liga.nm,
+              precio: calcPrecio(rating),
+              rating: rating,
+              api_id: p.id,
+              foto_url: p.photo||null
+            }
+          })
 
           if(jugadores.length>0){
             // Insertar en lotes
