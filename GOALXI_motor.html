@@ -199,6 +199,24 @@ async function apiCall(endpoint) {
   }
 }
 
+// Igual que apiCall pero jala TODAS las páginas y junta los resultados
+// (el endpoint /players pagina ~20 registros por página; con más de 20
+// jugadores por equipo se perdían los que caían después)
+async function apiCallAllPages(endpoint){
+  let pagina=1
+  let totalPaginas=1
+  let todos=[]
+  do{
+    const data = await apiCall(endpoint+'&page='+pagina)
+    if(!data||!data.response)break
+    todos=todos.concat(data.response)
+    totalPaginas=(data.paging&&data.paging.total)||1
+    pagina++
+    if(pagina<=totalPaginas)await new Promise(r=>setTimeout(r,400))
+  }while(pagina<=totalPaginas)
+  return todos
+}
+
 // TEST API
 async function testAPI() {
   log('Probando conexión con API-Football...')
@@ -643,12 +661,12 @@ async function cargarJugadoresAPI(){
         // 1) FUENTE PRINCIPAL: jugadores con minutos jugados ESTA temporada.
         // Esto es evidencia real de que juegan ahí ahora — no depende de que
         // API-Football haya actualizado su lista administrativa de "squad".
-        const statsData = await apiCall('/players?team='+eq.id+'&season='+liga.temporada)
-        await new Promise(r=>setTimeout(r,500))
+        const statsResponse = await apiCallAllPages('/players?team='+eq.id+'&season='+liga.temporada)
+        await new Promise(r=>setTimeout(r,300))
 
         let jugadores = []
-        if(statsData&&statsData.response&&statsData.response.length){
-          jugadores = statsData.response
+        if(statsResponse&&statsResponse.length){
+          jugadores = statsResponse
             .map(function(p){
               // Buscar, entre TODAS las entradas de statistics, la que corresponde a este equipo
               const stats = (p.statistics||[]).find(function(s){
@@ -760,10 +778,10 @@ async function revisarBajas(){
     }
 
     await new Promise(r=>setTimeout(r,500))
-    const statsData = await apiCall('/players?team='+equipoApi.id+'&season='+ligaCfg.temporada)
+    const statsResponse = await apiCallAllPages('/players?team='+equipoApi.id+'&season='+ligaCfg.temporada)
     const idsConMinutos = new Set()
-    if(statsData&&statsData.response){
-      statsData.response.forEach(function(p){
+    if(statsResponse){
+      statsResponse.forEach(function(p){
         const stats=(p.statistics||[]).find(function(s){
           return s.team && s.team.id===equipoApi.id && s.games && (s.games.appearences||0)>0
         })
