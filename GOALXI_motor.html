@@ -106,6 +106,7 @@ h1{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:900;colo
   <button class="btn red" onclick="stopMotor()">⏹ Detener motor</button>
   <button class="btn" onclick="cargarJugadoresAPI()">⬇️ Cargar jugadores desde API</button>
   <button class="btn secondary" onclick="revisarBajas()">🔔 Revisar bajas y avisar</button>
+  <button class="btn secondary" onclick="actualizarEquiposActivos()">🗓️ Actualizar equipos activos</button>
   <button class="btn secondary" onclick="simularEvento()">🎲 Simular evento</button>
 </div>
 
@@ -825,6 +826,60 @@ async function revisarBajas(){
   log('✅ REVISIÓN COMPLETA: '+totalBajas+' bajas detectadas, '+totalNotificaciones+' notificaciones enviadas')
   log('═══════════════════════════')
   revisionActiva=false
+}
+
+// ══════════ EQUIPOS ACTIVOS ESTA JORNADA ══════════
+// Detecta qué equipos tienen partido programado esta semana (próximos 7
+// días) en cada liga, para que la app marque en el builder a los
+// jugadores cuyo equipo no juega esta jornada.
+let actualizandoActivos=false
+
+function fechaISO(d){return d.toISOString().split('T')[0]}
+
+async function actualizarEquiposActivos(){
+  if(actualizandoActivos){log('Ya hay una actualización activa...','warn');return}
+  actualizandoActivos=true
+  log('═══ ACTUALIZANDO EQUIPOS ACTIVOS ESTA JORNADA ═══')
+
+  const hoy=new Date()
+  const en7dias=new Date(hoy.getTime()+7*24*60*60*1000)
+  const desde=fechaISO(hoy)
+  const hasta=fechaISO(en7dias)
+  log('Ventana: '+desde+' a '+hasta)
+
+  const equiposActivos=[] // {equipo, liga}
+
+  for(const liga of LIGAS_CONFIG){
+    const data=await apiCall('/fixtures?league='+liga.id+'&season='+liga.temporada+'&from='+desde+'&to='+hasta)
+    await new Promise(r=>setTimeout(r,500))
+    if(!data||!data.response){
+      log('⚠️ Sin fixtures para '+liga.nm,'warn')
+      continue
+    }
+    const equiposSet=new Set()
+    data.response.forEach(function(p){
+      equiposSet.add(p.teams.home.name)
+      equiposSet.add(p.teams.away.name)
+    })
+    equiposSet.forEach(function(nm){equiposActivos.push({equipo:nm,liga:liga.nm})})
+    log('✅ '+liga.nm+': '+equiposSet.size+' equipos con partido esta semana ('+data.response.length+' partidos)')
+  }
+
+  if(!equiposActivos.length){
+    log('⚠️ No se encontraron partidos esta semana en ninguna liga — no se actualiza la tabla','warn')
+    actualizandoActivos=false
+    return
+  }
+
+  await sb.from('equipos_activos_jornada').delete().neq('equipo','')
+  for(let i=0;i<equiposActivos.length;i+=20){
+    await sb.from('equipos_activos_jornada').insert(equiposActivos.slice(i,i+20))
+  }
+
+  log('═══════════════════════════')
+  log('✅ '+equiposActivos.length+' equipos marcados como activos esta jornada')
+  log('═══════════════════════════')
+  actualizandoActivos=false
 }
 
 log('Sistema GOALXI Motor v1.0 iniciado')
