@@ -208,9 +208,13 @@ async function apiCallAllPages(endpoint){
   let todos=[]
   do{
     const data = await apiCall(endpoint+'&page='+pagina)
-    if(!data||!data.response)break
+    if(!data||!data.response){
+      log('⚠️ Página '+pagina+' sin respuesta válida para '+endpoint+' — errores: '+JSON.stringify(data&&data.errors),'warn')
+      break
+    }
     todos=todos.concat(data.response)
     totalPaginas=(data.paging&&data.paging.total)||1
+    log('📄 '+endpoint.split('?')[0]+' página '+pagina+'/'+totalPaginas+' — '+data.response.length+' registros (acumulado: '+todos.length+')')
     pagina++
     if(pagina<=totalPaginas)await new Promise(r=>setTimeout(r,400))
   }while(pagina<=totalPaginas)
