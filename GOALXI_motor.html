@@ -850,19 +850,26 @@ async function actualizarEquiposActivos(){
   const equiposActivos=[] // {equipo, liga}
 
   for(const liga of LIGAS_CONFIG){
-    const data=await apiCall('/fixtures?league='+liga.id+'&season='+liga.temporada+'&from='+desde+'&to='+hasta)
-    await new Promise(r=>setTimeout(r,500))
-    if(!data||!data.response){
+    const temporadas=[liga.temporada, liga.temporada+1]
+    const equiposSet=new Set()
+    let totalPartidos=0
+    for(const temp of temporadas){
+      const data=await apiCall('/fixtures?league='+liga.id+'&season='+temp+'&from='+desde+'&to='+hasta)
+      await new Promise(r=>setTimeout(r,500))
+      if(data&&data.response&&data.response.length){
+        data.response.forEach(function(p){
+          equiposSet.add(p.teams.home.name)
+          equiposSet.add(p.teams.away.name)
+        })
+        totalPartidos+=data.response.length
+      }
+    }
+    if(!equiposSet.size){
       log('⚠️ Sin fixtures para '+liga.nm,'warn')
       continue
     }
-    const equiposSet=new Set()
-    data.response.forEach(function(p){
-      equiposSet.add(p.teams.home.name)
-      equiposSet.add(p.teams.away.name)
-    })
     equiposSet.forEach(function(nm){equiposActivos.push({equipo:nm,liga:liga.nm})})
-    log('✅ '+liga.nm+': '+equiposSet.size+' equipos con partido esta semana ('+data.response.length+' partidos)')
+    log('✅ '+liga.nm+': '+equiposSet.size+' equipos con partido esta semana ('+totalPartidos+' partidos)')
   }
 
   if(!equiposActivos.length){
