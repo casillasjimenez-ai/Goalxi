@@ -639,47 +639,67 @@ async function cargarJugadoresAPI(){
     log('✅ '+liga.nm+': '+equipos.length+' equipos encontrados')
     for(const eq of equipos){
       try{
-        // 1) Roster REAL y actual — /players/squads NO mezcla temporadas/préstamos
-        const squadData = await apiCall('/players/squads?team='+eq.id)
+        // 1) FUENTE PRINCIPAL: jugadores con minutos jugados ESTA temporada.
+        // Esto es evidencia real de que juegan ahí ahora — no depende de que
+        // API-Football haya actualizado su lista administrativa de "squad".
+        const statsData = await apiCall('/players?team='+eq.id+'&season='+liga.temporada)
         await new Promise(r=>setTimeout(r,500))
 
-        if(!squadData||!squadData.response||!squadData.response.length||!squadData.response[0].players||!squadData.response[0].players.length){
-          log('⚠️ '+eq.nm+': sin squad','warn')
-        } else {
-          // 2) Stats de temporada — SOLO para sacar el rating de los que YA sabemos que están en el squad
-          const statsData = await apiCall('/players?team='+eq.id+'&season='+liga.temporada)
-          const ratingPorId = {}
-          if(statsData&&statsData.response){
-            statsData.response.forEach(function(p){
+        let jugadores = []
+        if(statsData&&statsData.response&&statsData.response.length){
+          jugadores = statsData.response
+            .filter(function(p){
               const stats=p.statistics&&p.statistics[0]
-              if(stats&&stats.games&&stats.games.rating){
-                ratingPorId[p.player.id] = Math.round(parseFloat(stats.games.rating)*10)
+              const jugoEsteTeam = stats&&stats.team&&stats.team.id===eq.id
+              const tieneMinutos = stats&&stats.games&&(stats.games.appearences||0)>0
+              return jugoEsteTeam && tieneMinutos
+            })
+            .map(function(p){
+              const stats=p.statistics[0]
+              const rating = stats.games.rating ? Math.round(parseFloat(stats.games.rating)*10) : 75
+              return {
+                nombre: p.player.name,
+                posicion: mapPos(stats.games.position),
+                equipo: eq.nm,
+                liga: liga.nm,
+                precio: calcPrecio(rating),
+                rating: rating,
+                api_id: p.player.id,
+                foto_url: p.player.photo||null
               }
             })
-          }
+        }
 
-          const jugadores = squadData.response[0].players.map(function(p){
-            const rating = ratingPorId[p.id] || 75
-            return {
-              nombre: p.name,
-              posicion: mapPos(p.position),
-              equipo: eq.nm,
-              liga: liga.nm,
-              precio: calcPrecio(rating),
-              rating: rating,
-              api_id: p.id,
-              foto_url: p.photo||null
-            }
-          })
-
-          if(jugadores.length>0){
-            // Insertar en lotes
-            for(let i=0;i<jugadores.length;i+=20){
-              await sb.from('jugadores').insert(jugadores.slice(i,i+20))
-            }
-            totalCargados+=jugadores.length
-            log('✅ '+eq.nm+': '+jugadores.length+' jugadores')
+        // 2) RESPALDO: si el equipo aún no tiene partidos jugados esta temporada
+        // (torneo recién empezando), caemos a /players/squads
+        if(jugadores.length===0){
+          const squadData = await apiCall('/players/squads?team='+eq.id)
+          await new Promise(r=>setTimeout(r,500))
+          if(squadData&&squadData.response&&squadData.response.length&&squadData.response[0].players){
+            jugadores = squadData.response[0].players.map(function(p){
+              return {
+                nombre: p.name,
+                posicion: mapPos(p.position),
+                equipo: eq.nm,
+                liga: liga.nm,
+                precio: calcPrecio(75),
+                rating: 75,
+                api_id: p.id,
+                foto_url: p.photo||null
+              }
+            })
+            log('ℹ️ '+eq.nm+': sin partidos jugados aún, usando squad de respaldo','warn')
           }
+        }
+
+        if(jugadores.length>0){
+          for(let i=0;i<jugadores.length;i+=20){
+            await sb.from('jugadores').insert(jugadores.slice(i,i+20))
+          }
+          totalCargados+=jugadores.length
+          log('✅ '+eq.nm+': '+jugadores.length+' jugadores')
+        } else {
+          log('⚠️ '+eq.nm+': sin datos','warn')
         }
       }catch(e){
         log('Error '+eq.nm+': '+e.message,'err')
