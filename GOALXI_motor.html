@@ -145,10 +145,10 @@ const sb = supabase.createClient(SB_URL, SB_KEY)
 
 // LIGAS DEL TORNEO
 const LIGAS = [
-  {id:140, nombre:'LaLiga',    temporada:2024},
-  {id:262, nombre:'Liga MX',   temporada:2024},
-  {id:128, nombre:'Argentina', temporada:2024},
-  {id:71,  nombre:'Brasil',    temporada:2024},
+  {id:140, nombre:'LaLiga',    temporada:2025},
+  {id:262, nombre:'Liga MX',   temporada:2026},
+  {id:128, nombre:'Argentina', temporada:2026},
+  {id:71,  nombre:'Brasil',    temporada:2026},
 ]
 
 // SISTEMA DE PUNTOS
@@ -582,8 +582,8 @@ function log(msg, tipo) {
 // IDs de ligas en API-Football
 const LIGAS_CONFIG = [
   {id:140, nm:'LaLiga',  temporada:2025},
-  {id:262, nm:'Liga MX', temporada:2025},
-  {id:253, nm:'MLS',     temporada:2025},
+  {id:262, nm:'Liga MX', temporada:2026},
+  {id:253, nm:'MLS',     temporada:2026},
 ]
 
 // Función para obtener equipos directamente de la API
@@ -647,7 +647,7 @@ async function cargarJugadoresAPI(){
           log('⚠️ '+eq.nm+': sin squad','warn')
         } else {
           // 2) Stats de temporada — SOLO para sacar el rating de los que YA sabemos que están en el squad
-          const statsData = await apiCall('/players?team='+eq.id+'&season=2025')
+          const statsData = await apiCall('/players?team='+eq.id+'&season='+liga.temporada)
           const ratingPorId = {}
           if(statsData&&statsData.response){
             statsData.response.forEach(function(p){
