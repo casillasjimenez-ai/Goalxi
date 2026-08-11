@@ -102,9 +102,9 @@ h1{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:900;colo
   <div class="card-title">Controles</div>
   <button class="btn" onclick="testAPI()">🔌 Probar API</button>
   <button class="btn" onclick="fetchPartidos()">📡 Cargar partidos hoy</button>
-  <button class="btn" onclick="cargarJugadoresAPI()">⬇️ Cargar jugadores desde API</button>
   <button class="btn" onclick="startMotor()">▶️ Iniciar motor</button>
   <button class="btn red" onclick="stopMotor()">⏹ Detener motor</button>
+  <button class="btn" onclick="cargarJugadoresAPI()">⬇️ Cargar jugadores desde API</button>
   <button class="btn secondary" onclick="simularEvento()">🎲 Simular evento</button>
 </div>
 
@@ -147,7 +147,6 @@ const sb = supabase.createClient(SB_URL, SB_KEY)
 const LIGAS = [
   {id:140, nombre:'LaLiga',    temporada:2024},
   {id:262, nombre:'Liga MX',   temporada:2024},
-  {id:253, nombre:'MLS',        temporada:2024},
   {id:128, nombre:'Argentina', temporada:2024},
   {id:71,  nombre:'Brasil',    temporada:2024},
 ]
@@ -441,85 +440,73 @@ async function getPosicionJugador(nombre) {
 }
 
 async function distribuirPuntos(jugadorNombre, tipo, puntos, fixtureId, minuto) {
-  // Buscar jugador en DB
-  const{data:jugador, error:jErr}=await sb.from('jugadores')
-    .select('id,nombre').ilike('nombre','%'+jugadorNombre.split(' ')[0]+'%').maybeSingle()
-  if(jErr){log('Error buscando jugador: '+jErr.message,'err');return}
-  if(!jugador){log('⚠️ Jugador no encontrado: '+jugadorNombre,'warn');return}
-  log('🔍 Jugador encontrado: '+jugador.nombre+' (id:'+jugador.id+')')
-
-  // Guardar evento (ignorar duplicados)
+  // Buscar el jugador en la DB
+  const{data:jugador}=await sb.from('jugadores').select('id').ilike('nombre','%'+jugadorNombre.split(' ')[0]+'%').single()
+  if (!jugador) {
+    log('Jugador no encontrado en DB: ' + jugadorNombre, 'warn')
+    return
+  }
+  
+  // Guardar evento
   await sb.from('eventos_partido').insert({
-    partido_id:fixtureId, jugador_id:jugador.id,
-    tipo:tipo, minuto:minuto, puntos:puntos, procesado:true
+    partido_id: fixtureId,
+    jugador_id: jugador.id,
+    tipo: tipo,
+    minuto: minuto,
+    puntos: puntos,
+    procesado: true
   })
-
-  // Buscar slots del equipo con este jugador
-  const{data:slots,error:sErr}=await sb.from('equipo_jugadores')
-    .select('id,puntos,equipo_fantasy_id,equipos_fantasy(id,puntos_total,usuario_id)')
-    .eq('jugador_id',jugador.id)
-  if(sErr){log('Error buscando slots: '+sErr.message,'err');return}
-  if(!slots||!slots.length){log('⚠️ Ningún equipo tiene a '+jugador.nombre,'info');return}
-
-  log('✅ '+jugador.nombre+' en '+slots.length+' equipo(s)')
-
-  for(const slot of slots){
-    const ef=slot.equipos_fantasy
-    const puntosFinales=puntos
-    const nuevoPtsSlot=(slot.puntos||0)+puntosFinales
-
+  
+  // Buscar todos los slots de equipo que tienen este jugador
+  const{data:slots}=await sb.from('equipo_jugadores')
+    .select('*,equipos_fantasy!inner(id,capitan_id,puntos_total,usuario_id)')
+    .eq('jugador_id', jugador.id)
+  
+  if (!slots || !slots.length) return
+  
+  // Distribuir puntos a cada equipo que tiene el jugador
+  for (const slot of slots) {
+    const ef = slot.equipos_fantasy
+    const esCap = ef.capitan_id === jugador.id
+    const puntosFinales = esCap ? puntos * 2 : puntos
+    
     // Actualizar puntos del slot
-    const{error:uErr}=await sb.from('equipo_jugadores')
-      .update({puntos:nuevoPtsSlot}).eq('id',slot.id)
-    if(uErr){log('Error update slot: '+uErr.message,'err');continue}
-
-    // Recalcular total del equipo sumando todos sus slots
-    const{data:todosSlots}=await sb.from('equipo_jugadores')
-      .select('puntos').eq('equipo_fantasy_id',ef.id)
-    const nuevoTotal=(todosSlots||[]).reduce(function(s,r){return s+(r.puntos||0)},0)
-
-    const{error:efErr}=await sb.from('equipos_fantasy')
-      .update({puntos_total:nuevoTotal}).eq('id',ef.id)
-    if(efErr){log('Error update equipo: '+efErr.message,'err');continue}
-
+    await sb.from('equipo_jugadores')
+      .update({ puntos: (slot.puntos || 0) + puntosFinales })
+      .eq('id', slot.id)
+    
+    // Recalcular total del equipo
+    await sb.rpc('calcular_puntos_equipo', { p_equipo_id: ef.id })
+    
     equiposActualizados++
-    document.getElementById('st-equipos').textContent=equiposActualizados
-    log('⚡ +'+puntosFinales+' pts → equipo '+ef.id+' (total: '+nuevoTotal+')')
+    document.getElementById('st-equipos').textContent = equiposActualizados
+    
+    if (esCap) log('⭐ Capitán ' + jugadorNombre + ': +' + puntosFinales + ' pts (x2) → equipo ' + ef.id)
   }
-
-  await recalcularPosiciones()
-}
-
-async function recalcularPosiciones(){
-  const{data:equipos}=await sb.from('equipos_fantasy')
-    .select('id,puntos_total').eq('torneo_id',1)
-    .order('puntos_total',{ascending:false})
-  if(!equipos)return
-  for(let i=0;i<equipos.length;i++){
-    await sb.from('equipos_fantasy').update({posicion_rank:i+1}).eq('id',equipos[i].id)
-  }
+  
+  // Actualizar ranking
+  await sb.rpc('actualizar_ranking_torneo', { p_torneo_id: 1 })
 }
 
 async function actualizarRanking() {
-  const{data,error}=await sb.from('equipos_fantasy')
-    .select('posicion_rank,puntos_total,usuario_id,usuarios(nombre,username)')
-    .eq('torneo_id',1)
-    .order('puntos_total',{ascending:false})
+  const{data}=await sb.from('equipos_fantasy')
+    .select('posicion_rank,puntos_total,usuarios(nombre,username)')
+    .eq('torneo_id', 1)
+    .order('puntos_total', { ascending: false })
     .limit(10)
-  if(error){log('Error ranking: '+error.message,'err');return}
-  if(!data||!data.length){
-    document.getElementById('ranking-list').innerHTML='<div style="color:var(--t3);font-size:13px">Sin equipos aún.</div>'
-    return
-  }
-  const container=document.getElementById('ranking-list')
-  container.innerHTML=''
-  data.forEach(function(eq,i){
-    const div=document.createElement('div')
-    div.className='ranking-item'
-    const posClass=i===0?'t1':i===1?'t2':i===2?'t3':''
-    const nom=eq.usuarios?.nombre||'Usuario'
-    const usr=eq.usuarios?.username||eq.usuario_id?.slice(0,8)||'—'
-    div.innerHTML='<div class="rk-pos '+posClass+'">'+(i+1)+'</div><div class="rk-user">'+nom+'<br><span style="font-size:11px;color:var(--t3)">@'+usr+'</span></div><div class="rk-pts">'+Math.floor(eq.puntos_total||0)+'</div>'
+  
+  if (!data || !data.length) return
+  
+  const container = document.getElementById('ranking-list')
+  container.innerHTML = ''
+  
+  data.forEach(function(eq, i) {
+    const div = document.createElement('div')
+    div.className = 'ranking-item'
+    const posClass = i===0?'t1':i===1?'t2':i===2?'t3':''
+    const nom = eq.usuarios?.nombre || '—'
+    const usr = eq.usuarios?.username || '—'
+    div.innerHTML = '<div class="rk-pos ' + posClass + '">' + (i+1) + '</div><div class="rk-user">' + nom + '<br><span style="font-size:11px;color:var(--t3)">@' + usr + '</span></div><div class="rk-pts">' + Math.floor(eq.puntos_total||0) + '</div>'
     container.appendChild(div)
   })
 }
@@ -590,53 +577,9 @@ function log(msg, tipo) {
   container.scrollTop = container.scrollHeight
 }
 
-// BUSCAR IDs DE JUGADORES - plantilla completa por equipo
-async function buscarIDsJugadores(){
-  log('🔍 Descargando plantillas completas (7 equipos)...')
-  const equipos=[
-    {id:541,nm:'Real Madrid'},{id:529,nm:'Barcelona'},{id:530,nm:'Atletico'},
-    {id:1195,nm:'America'},{id:1193,nm:'Chivas'},{id:1194,nm:'Rayados'},{id:1197,nm:'Cruz Azul'},
-    {id:4347,nm:'Inter Miami'},{id:1615,nm:'LA Galaxy'},{id:1611,nm:'Columbus'},{id:1610,nm:'Nashville'},
-  ]
-  const mapa={}
-  for(const eq of equipos){
-    try{
-      log('📋 '+eq.nm+'...')
-      const data=await apiCall('/players?team='+eq.id+'&season=2024')
-      if(data&&data.response&&data.response.length>0){
-        data.response.forEach(function(p){
-          mapa[p.player.name]={id:p.player.id,photo:p.player.photo}
-        })
-        log('✅ '+eq.nm+': '+data.response.length+' jugadores')
-      } else {
-        log('⚠️ '+eq.nm+': sin datos','warn')
-      }
-    }catch(e){log('Error '+eq.nm+': '+e.message,'err')}
-    await new Promise(r=>setTimeout(r,600))
-  }
-  // Mostrar tabla de jugadores GOALXI con sus IDs correctos
-  const jugadoresGoalxi=[
-    'Vinicius Jr.','R. Lewandowski','J. Bellingham','Raphinha','A. Griezmann',
-    'Pedri','L. Modrić','T. Kroos','F. de Jong','Koke',
-    'D. Carvajal','E. Militão','R. Araújo','J. Alba','S. Savić',
-    'T. Courtois','M. ter Stegen','J. Oblak',
-    'Henry Martín','R. Funes Mori','A. Vega','O. Pineda','H. Herrera','F. Beltrán','J. Gallardo','A. Briseño','G. Ochoa','E. Andrada'
-  ]
-  log('═══ IDs ENCONTRADOS ═══')
-  jugadoresGoalxi.forEach(function(nombre){
-    // Buscar coincidencia parcial
-    const key=Object.keys(mapa).find(function(k){
-      return k.toLowerCase().indexOf(nombre.split(' ')[nombre.split(' ').length-1].toLowerCase())!==-1
-           ||nombre.toLowerCase().indexOf(k.split(' ')[k.split(' ').length-1].toLowerCase())!==-1
-    })
-    if(key) log('✅ '+nombre+' → ID:'+mapa[key].id+' ('+key+')')
-    else log('⚠️ NO encontrado: '+nombre,'warn')
-  })
-  log('═══ FIN ═══')
-}
-
-// ══════════════ CARGA JUGADORES DESDE API ══════════════
-const EQUIPOS_LIGAS = {
+// INIT
+// ══════════ CARGA JUGADORES DESDE API ══════════
+const EQUIPOS_CARGA = {
   LaLiga: [
     {id:541,nm:'Real Madrid'},{id:529,nm:'Barcelona'},{id:530,nm:'Atletico Madrid'},
     {id:548,nm:'Real Sociedad'},{id:532,nm:'Valencia'},{id:533,nm:'Villarreal'},
@@ -664,11 +607,10 @@ const EQUIPOS_LIGAS = {
     {id:1627,nm:'Vancouver'},{id:1628,nm:'Philadelphia'},{id:1629,nm:'Orlando'},
     {id:1630,nm:'Atlanta'},{id:1631,nm:'Minnesota'},{id:1632,nm:'Cincinnati'},
     {id:1633,nm:'DC United'},{id:1634,nm:'Austin'},{id:1635,nm:'Charlotte'},
-    {id:1636,nm:'St Louis'},{id:1637,nm:'San Diego'},
+    {id:1636,nm:'St Louis'},
   ]
 }
 
-// Posiciones API → GOALXI
 function mapPos(pos){
   if(!pos)return 'MED'
   const p=pos.toUpperCase()
@@ -678,7 +620,6 @@ function mapPos(pos){
   return 'MED'
 }
 
-// Precio basado en rating
 function calcPrecio(rating){
   if(!rating||rating<70)return 5.0
   if(rating>=90)return 12.0
@@ -689,88 +630,97 @@ function calcPrecio(rating){
 }
 
 let cargaActiva=false
-let totalCargados=0
 
 async function cargarJugadoresAPI(){
-  if(cargaActiva){log('Ya hay una carga en proceso...','warn');return}
+  if(cargaActiva){log('Ya hay una carga activa...','warn');return}
   cargaActiva=true
-  totalCargados=0
-  log('═══════════════════════════')
-  log('⬇️ INICIANDO CARGA COMPLETA DE JUGADORES')
-  log('Ligas: LaLiga + Liga MX + MLS')
-  log('═══════════════════════════')
+  let totalCargados=0
+  log('═══ INICIANDO CARGA DE JUGADORES ═══')
+  log('LaLiga + Liga MX + MLS — temporada 2025')
 
-  // Limpiar tabla jugadores antes de recargar
-  const{error:delErr}=await sb.from('jugadores').delete().neq('id',0)
-  if(delErr){log('Error limpiando jugadores: '+delErr.message,'err')}
-  else{log('🗑️ Tabla jugadores limpiada')}
+  // Limpiar jugadores anteriores
+  const{error:del1}=await sb.from('equipo_jugadores').delete().neq('id',0)
+  const{error:del2}=await sb.from('equipos_fantasy').delete().neq('id',0)
+  const{error:del3}=await sb.from('jugadores').delete().neq('id',0)
+  log('🗑️ Tablas limpiadas')
 
-  for(const [liga,equipos] of Object.entries(EQUIPOS_LIGAS)){
+  for(const [liga,equipos] of Object.entries(EQUIPOS_CARGA)){
     log('━━━ '+liga+' ('+equipos.length+' equipos) ━━━')
     for(const eq of equipos){
-      await cargarEquipo(eq.id, eq.nm, liga)
-      // Pausa para no exceder rate limit
-      await new Promise(r=>setTimeout(r,800))
+      try{
+        // Intentar temporada 2025 primero
+        let data=await apiCall('/players?team='+eq.id+'&season=2025')
+        if(!data||!data.response||!data.response.length){
+          await new Promise(r=>setTimeout(r,2000))
+          data=await apiCall('/players?team='+eq.id+'&season=2024')
+        }
+        if(!data||!data.response||!data.response.length){
+          log('⚠️ '+eq.nm+': sin datos','warn')
+        } else {
+          // Filtrar solo primer equipo: jugadores con posición definida
+          // y ordenar por minutos jugados para tomar los titulares
+          const jugadores=data.response
+            .filter(function(p){
+              const stats=p.statistics&&p.statistics[0]
+              const tienePos=stats&&stats.games&&stats.games.position
+              const nombreOk=p.player.name&&p.player.name.trim().length>2
+              // Excluir jugadores sin foto (generalmente son filiales)
+              const tieneFoto=p.player.photo&&p.player.photo.indexOf('no-photo')===-1
+              return tienePos&&nombreOk
+            })
+            .map(function(p){
+              const stats=p.statistics[0]
+              const rating=stats.games.rating?Math.round(parseFloat(stats.games.rating)*10):75
+              const minutos=stats.games.minutes||0
+              const apps=stats.games.appearences||0
+              return {
+                nombre:p.player.name,
+                posicion:mapPos(stats.games.position),
+                equipo:eq.nm,
+                liga:liga,
+                precio:calcPrecio(rating),
+                rating:rating||75,
+                api_id:p.player.id,
+                foto_url:p.player.photo||null,
+                _minutos:minutos,
+                _apps:apps
+              }
+            })
+            // Ordenar por minutos jugados — los que más juegan son del primer equipo
+            .sort(function(a,b){return b._minutos-a._minutos})
+            // Tomar máximo 22 jugadores por equipo (plantilla real)
+            .slice(0,22)
+            .map(function(j){
+              // Limpiar campos internos
+              delete j._minutos; delete j._apps; return j
+            })
+
+          if(jugadores.length>0){
+            // Insertar en lotes
+            for(let i=0;i<jugadores.length;i+=20){
+              await sb.from('jugadores').insert(jugadores.slice(i,i+20))
+            }
+            totalCargados+=jugadores.length
+            log('✅ '+eq.nm+': '+jugadores.length+' jugadores')
+          }
+        }
+      }catch(e){
+        log('Error '+eq.nm+': '+e.message,'err')
+      }
+      // 3 segundos entre equipos para respetar rate limit
+      await new Promise(r=>setTimeout(r,3000))
     }
   }
-
   log('═══════════════════════════')
   log('✅ CARGA COMPLETA: '+totalCargados+' jugadores guardados')
   log('═══════════════════════════')
   cargaActiva=false
 }
 
-async function cargarEquipo(teamId, teamNm, liga){
-  try{
-    // Temporada 2025 (activa en 2026)
-    let data=await apiCall('/players?team='+teamId+'&season=2025')
-    if(!data||!data.response||!data.response.length){
-      // Fallback a 2024 si no hay datos
-      await new Promise(r=>setTimeout(r,400))
-      data=await apiCall('/players?team='+teamId+'&season=2024')
-    }
-    if(!data||!data.response||!data.response.length){
-      log('⚠️ '+teamNm+': sin datos','warn')
-      return
-    }
-    const jugadores=data.response.map(function(p){
-      const pl=p.player
-      const stats=p.statistics&&p.statistics[0]
-      const rating=stats&&stats.games&&stats.games.rating?parseFloat(stats.games.rating):75
-      const pos=stats&&stats.games&&stats.games.position?stats.games.position:'Midfielder'
-      return {
-        nombre: pl.name,
-        posicion: mapPos(pos),
-        equipo: teamNm,
-        liga: liga,
-        precio: calcPrecio(Math.round(rating*10)),
-        rating: Math.round(rating*10)||75,
-        api_id: pl.id,
-        foto_url: pl.photo||null
-      }
-    })
-
-    // Insertar en Supabase en lotes de 20
-    for(let i=0;i<jugadores.length;i+=20){
-      const lote=jugadores.slice(i,i+20)
-      const{error}=await sb.from('jugadores').insert(lote)
-      if(error)log('Error insert '+teamNm+': '+error.message,'err')
-      else totalCargados+=lote.length
-    }
-    log('✅ '+teamNm+': '+jugadores.length+' jugadores')
-    document.getElementById('st-equipos').textContent=totalCargados
-
-  }catch(e){
-    log('Error '+teamNm+': '+e.message,'err')
-  }
-}
-
-// INIT
 log('Sistema GOALXI Motor v1.0 iniciado')
 log('Supabase: ' + SB_URL, 'info')
 log('API-Football: ' + API_URL, 'info')
 log('Listo. Toca "Probar API" para verificar conexión.')
-actualizarRanking()
 </script>
 </body>
 </html>
