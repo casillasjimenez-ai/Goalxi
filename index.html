@@ -1202,8 +1202,8 @@ function renderPlayers(){
     div.innerHTML='<div class="p-pic">'+getPlayerImg(j)+'</div>'
       +'<div class="p-info"><div class="p-nm">'+j.nm+'</div>'
       +'<div class="p-mt">'+j.eq+' · <b>'+j.pos+'</b> · '+j.liga+'</div></div>'
-      +'<div class="p-rt" style="display:flex;align-items:center;gap:10px">'+getTeamLogo(j)
-      +'<div><div class="p-price">'+j.p+'M</div>'
+      +'<div style="width:42px;display:flex;justify-content:center">'+getTeamLogo(j)+'</div>'
+      +'<div class="p-rt"><div class="p-price">'+j.p+'M</div>'
       +'<div class="p-rat">★ '+j.r+'</div>'
       +'<div class="'+(j.tr==='up'?'p-trend-up':'p-trend-dn')+'">'+(j.tr==='up'?'↑ forma':'↓ forma')+'</div></div>'
     c.appendChild(div)
