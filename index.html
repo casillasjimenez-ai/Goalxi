@@ -615,11 +615,12 @@ html,body{height:100%;background:var(--bg);font-family:'Barlow',sans-serif;color
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-search" style="display:flex;gap:8px;align-items:center;margin-top:10px">
-      <input class="inp" id="p-search" placeholder="🔍  Buscar..." oninput="renderPlayers()" style="flex:1">
+      <input class="inp" id="p-search" placeholder="🔍  Buscar jugador por nombre..." oninput="renderPlayers()" style="flex:1">
     </div>
-    <div class="modal-filters" id="searchmode-filters" style="padding-top:0">
-      <div class="f-chip on" id="sm-nombre" onclick="setSearchMode('nombre')">Nombre</div>
-      <div class="f-chip" id="sm-equipo" onclick="setSearchMode('equipo')">Equipo</div>
+    <div class="modal-search" style="margin-top:8px">
+      <select class="inp" id="p-equipo" onchange="renderPlayers()" style="width:100%">
+        <option value="">⚽ Todos los equipos</option>
+      </select>
     </div>
     <div class="modal-filters" id="liga-filters">
       <div class="f-chip on" onclick="setLiga(this,'all')">Todos</div>
@@ -1123,7 +1124,7 @@ function openModal(sl,pos){
   ligaF='all'
   document.getElementById('modal-ttl').textContent='Selecciona '+pos
   document.getElementById('p-search').value=''
-  setSearchMode('nombre')
+  poblarEquipos()
   document.querySelectorAll('#liga-filters .f-chip').forEach(function(c){c.classList.remove('on')})
   const firstLigaChip=document.querySelector('#liga-filters .f-chip')
   if(firstLigaChip)firstLigaChip.classList.add('on')
@@ -1153,25 +1154,16 @@ function getPlayerImgSmall(j){
   return '<span style="font-size:18px">'+j.em+'</span>'
 }
 
-let searchMode='nombre'
-function setSearchMode(m){
-  searchMode=m
-  document.getElementById('sm-nombre').classList.toggle('on',m==='nombre')
-  document.getElementById('sm-equipo').classList.toggle('on',m==='equipo')
-  renderPlayers()
-}
-
 function renderPlayers(){
   const search=document.getElementById('p-search').value.toLowerCase()
+  const equipoSel=document.getElementById('p-equipo').value
   const pos=slot?slot.split('_')[0]:null
   const usedIds=Object.values(team).map(function(j){return j.id})
   const list=getPlayers().filter(function(j){
     if(pos&&j.pos!==pos)return false
     if(ligaF!=='all'&&j.liga!==ligaF)return false
-    if(search){
-      const campo=searchMode==='equipo'?j.eq:j.nm
-      if(campo.toLowerCase().indexOf(search)===-1)return false
-    }
+    if(equipoSel&&j.eq!==equipoSel)return false
+    if(search&&j.nm.toLowerCase().indexOf(search)===-1)return false
     return true
   })
   const c=document.getElementById('p-list')
@@ -1203,10 +1195,24 @@ function selectPlayer(j){
   toast(j.nm+' agregado ✅','ok')
 }
 
+function poblarEquipos(){
+  const sel=document.getElementById('p-equipo')
+  const actual=sel.value
+  const equipos=Array.from(new Set(
+    getPlayers()
+      .filter(function(j){return ligaF==='all'||j.liga===ligaF})
+      .map(function(j){return j.eq})
+  )).sort()
+  sel.innerHTML='<option value="">⚽ Todos los equipos</option>'+
+    equipos.map(function(e){return '<option value="'+e.replace(/"/g,'&quot;')+'">'+e+'</option>'}).join('')
+  if(equipos.indexOf(actual)!==-1)sel.value=actual
+}
+
 function setLiga(el,liga){
   document.querySelectorAll('#liga-filters .f-chip').forEach(function(c){c.classList.remove('on')})
   el.classList.add('on')
   ligaF=liga
+  poblarEquipos()
   renderPlayers()
 }
 
