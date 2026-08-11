@@ -648,14 +648,16 @@ async function cargarJugadoresAPI(){
         let jugadores = []
         if(statsData&&statsData.response&&statsData.response.length){
           jugadores = statsData.response
-            .filter(function(p){
-              const stats=p.statistics&&p.statistics[0]
-              const jugoEsteTeam = stats&&stats.team&&stats.team.id===eq.id
-              const tieneMinutos = stats&&stats.games&&(stats.games.appearences||0)>0
-              return jugoEsteTeam && tieneMinutos
-            })
             .map(function(p){
-              const stats=p.statistics[0]
+              // Buscar, entre TODAS las entradas de statistics, la que corresponde a este equipo
+              const stats = (p.statistics||[]).find(function(s){
+                return s.team && s.team.id===eq.id && s.games && (s.games.appearences||0)>0
+              })
+              return {p:p, stats:stats}
+            })
+            .filter(function(x){ return !!x.stats })
+            .map(function(x){
+              const p=x.p, stats=x.stats
               const rating = stats.games.rating ? Math.round(parseFloat(stats.games.rating)*10) : 75
               return {
                 nombre: p.player.name,
