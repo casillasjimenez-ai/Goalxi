@@ -396,7 +396,13 @@ html,body{height:100%;background:var(--bg);font-family:'Barlow',sans-serif;color
 <div class="scr" id="home">
   <div class="hdr">
     <div class="hdr-logo">⚽ GOALXI</div>
-    <button class="av-btn" id="av-btn" onclick="openDrawer()">B</button>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="av-btn" id="notif-btn" onclick="openNotifModal()" style="background:var(--card);border:1px solid var(--b2);position:relative">
+        🔔
+        <span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:10px;font-weight:800;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 3px">0</span>
+      </button>
+      <button class="av-btn" id="av-btn" onclick="openDrawer()">B</button>
+    </div>
   </div>
   <div class="scroll pb">
     <div class="tc" onclick="goTo('equipo')">
@@ -619,6 +625,18 @@ html,body{height:100%;background:var(--bg);font-family:'Barlow',sans-serif;color
   </div>
 </div>
 
+<!-- NOTIFICACIONES MODAL -->
+<div class="modal-ov" id="notif-modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-hdr">
+      <div class="modal-ttl">Notificaciones</div>
+      <button class="modal-close" onclick="closeNotifModal()">✕</button>
+    </div>
+    <div class="modal-list" id="notif-list" style="padding:16px 20px"></div>
+  </div>
+</div>
+
 <!-- LOGOUT MODAL -->
 <div class="lo-modal" id="lo-modal">
   <div class="lo-box">
@@ -717,13 +735,14 @@ const FMTS={'4-3-3':{DEL:3,MED:3,DEF:4,POR:1},'4-4-2':{DEL:2,MED:4,DEF:4,POR:1},
 async function init(){
   await new Promise(r=>setTimeout(r,1500))
   const{data:{session}}=await sb.auth.getSession()
-  if(session){CU=session.user;await loadProfile();show('home')}
+  if(session){CU=session.user;await loadProfile();show('home');checkNotificaciones()}
   else show('login')
   sb.auth.onAuthStateChange(async(ev,ses)=>{
-    if(ev==='SIGNED_IN'&&ses){CU=ses.user;await loadProfile();show('home')}
+    if(ev==='SIGNED_IN'&&ses){CU=ses.user;await loadProfile();show('home');checkNotificaciones()}
     if(ev==='SIGNED_OUT'){CU=null;show('login')}
   })
 }
+setInterval(function(){if(CU)checkNotificaciones()},30000)
 
 // PROFILE
 async function loadPlayersFromDB(){
@@ -915,6 +934,62 @@ function show(s){
 
 // DRAWER
 function openDrawer(){document.getElementById('drw').classList.add('on');document.getElementById('drw-ov').classList.add('on')}
+
+// NOTIFICACIONES
+async function checkNotificaciones(){
+  if(!CU)return
+  try{
+    const{data,count}=await sb.from('notificaciones_usuario')
+      .select('*',{count:'exact'})
+      .eq('usuario_id',CU.id)
+      .eq('leida',false)
+      .order('created_at',{ascending:false})
+    const badge=document.getElementById('notif-badge')
+    if(count&&count>0){
+      badge.style.display='flex'
+      badge.textContent=count>9?'9+':count
+    }else{
+      badge.style.display='none'
+    }
+  }catch(e){}
+}
+
+async function openNotifModal(){
+  if(!CU)return
+  const list=document.getElementById('notif-list')
+  list.innerHTML='<div style="color:var(--t3);font-size:13px;padding:12px 0">Cargando...</div>'
+  document.getElementById('notif-modal').classList.add('on')
+
+  const{data}=await sb.from('notificaciones_usuario')
+    .select('*')
+    .eq('usuario_id',CU.id)
+    .order('created_at',{ascending:false})
+    .limit(30)
+
+  if(!data||!data.length){
+    list.innerHTML='<div style="color:var(--t3);font-size:13px;padding:12px 0">No tienes notificaciones.</div>'
+    return
+  }
+
+  list.innerHTML=''
+  data.forEach(function(n){
+    const div=document.createElement('div')
+    div.style.cssText='background:'+(n.leida?'var(--bg2)':'#00FF8812')+';border:1px solid '+(n.leida?'var(--b1)':'#00FF8830')+';border-radius:12px;padding:12px 14px;margin-bottom:8px'
+    const fecha=new Date(n.created_at).toLocaleDateString('es-MX',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
+    div.innerHTML='<div style="font-size:14px;font-weight:600;margin-bottom:4px">'+(n.leida?'':'🔔 ')+esc(n.mensaje||'')+'</div><div style="font-size:11px;color:var(--t3)">'+fecha+'</div>'
+    if(!n.leida){
+      div.style.cursor='pointer'
+      div.onclick=async function(){
+        await sb.from('notificaciones_usuario').update({leida:true}).eq('id',n.id)
+        checkNotificaciones()
+        openNotifModal()
+      }
+    }
+    list.appendChild(div)
+  })
+}
+
+function closeNotifModal(){document.getElementById('notif-modal').classList.remove('on')}
 function closeDrawer(){document.getElementById('drw').classList.remove('on');document.getElementById('drw-ov').classList.remove('on')}
 
 // LOGOUT MODAL
