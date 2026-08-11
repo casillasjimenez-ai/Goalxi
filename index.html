@@ -1137,6 +1137,32 @@ function closeModal(){
   slot=null
 }
 
+// Mapeo equipo -> team_id de API-Football, para mostrar escudos
+const EQUIPO_TEAM_ID = {
+  'Barcelona':529,'Atletico Madrid':530,'Athletic Club':531,'Valencia':532,'Villarreal':533,
+  'Sevilla':536,'Celta Vigo':538,'Levante':539,'Espanyol':540,'Real Madrid':541,'Alaves':542,
+  'Real Betis':543,'Getafe':546,'Girona':547,'Real Sociedad':548,'Oviedo':718,'Osasuna':727,
+  'Rayo Vallecano':728,'Elche':797,'Mallorca':798,
+  'Guadalajara Chivas':2278,'Tigres UANL':2279,'Club Tijuana':2280,'Toluca':2281,'Monterrey':2282,
+  'Atlas':2283,'Santos Laguna':2285,'U.N.A.M. - Pumas':2286,'Club America':2287,'Necaxa':2288,
+  'Leon':2289,'Club Queretaro':2290,'Puebla':2291,'CF Pachuca':2292,'Cruz Azul':2295,
+  'FC Juarez':2298,'Atletico San Luis':2314,'Mazatlan':14002,
+  'Seattle Sounders':1595,'San Jose Earthquakes':1596,'FC Dallas':1597,'Orlando City SC':1598,
+  'Philadelphia Union':1599,'Houston Dynamo':1600,'Toronto FC':1601,'New York Red Bulls':1602,
+  'Vancouver Whitecaps':1603,'New York City FC':1604,'Los Angeles Galaxy':1605,'Real Salt Lake':1606,
+  'Chicago Fire':1607,'Atlanta United FC':1608,'New England Revolution':1609,'Colorado Rapids':1610,
+  'Sporting Kansas City':1611,'Minnesota United FC':1612,'Columbus Crew':1613,'CF Montreal':1614,
+  'DC United':1615,'Los Angeles FC':1616,'Portland Timbers':1617,'FC Cincinnati':2242,
+  'Inter Miami':9568,'Nashville SC':9569,'Austin':16489,'Charlotte':18310,
+  'St. Louis City':20787,'San Diego':25484
+}
+
+function getTeamLogo(j){
+  const tid=EQUIPO_TEAM_ID[j.eq]
+  if(!tid)return ''
+  return '<img src="https://media.api-sports.io/football/teams/'+tid+'.png" style="width:20px;height:20px;object-fit:contain" onerror="this.style.display=\'none\'">'
+}
+
 function getPlayerImg(j){
   const src=j.foto||(j.api?'https://media.api-sports.io/football/players/'+j.api+'.png':null)
   if(src){
@@ -1176,7 +1202,7 @@ function renderPlayers(){
     div.innerHTML='<div class="p-pic">'+getPlayerImg(j)+'</div>'
       +'<div class="p-info"><div class="p-nm">'+j.nm+'</div>'
       +'<div class="p-mt">'+j.eq+' · <b>'+j.pos+'</b> · '+j.liga+'</div></div>'
-      +'<div class="p-rt"><div class="p-price">'+j.p+'M</div>'
+      +'<div class="p-rt"><div class="p-price" style="display:flex;align-items:center;gap:5px;justify-content:flex-end">'+getTeamLogo(j)+j.p+'M</div>'
       +'<div class="p-rat">★ '+j.r+'</div>'
       +'<div class="'+(j.tr==='up'?'p-trend-up':'p-trend-dn')+'">'+(j.tr==='up'?'↑ forma':'↓ forma')+'</div></div>'
     c.appendChild(div)
