@@ -1209,13 +1209,13 @@ function renderPlayers(){
   list.forEach(function(j){
     const inUse=usedIds.indexOf(j.id)!==-1&&team[slot]?.id!==j.id
     const sinPartido=EQUIPOS_ACTIVOS&&EQUIPOS_ACTIVOS.size>0&&!EQUIPOS_ACTIVOS.has(j.eq)
+    const bloqueado=inUse||sinPartido
     const div=document.createElement('div')
-    div.className='p-row'+(inUse?' used':'')
-    if(sinPartido)div.style.opacity='0.55'
-    if(!inUse)div.onclick=function(){selectPlayer(j)}
+    div.className='p-row'+(bloqueado?' used':'')
+    if(!bloqueado)div.onclick=function(){selectPlayer(j)}
     div.innerHTML='<div class="p-pic">'+getPlayerImg(j)+'</div>'
       +'<div class="p-info"><div class="p-nm">'+j.nm+'</div>'
-      +'<div class="p-mt">'+j.eq+' · <b>'+j.pos+'</b> · '+j.liga+(sinPartido?' · <span style="color:var(--t3)">Sin partido esta jornada</span>':'')+'</div></div>'
+      +'<div class="p-mt">'+j.eq+' · <b>'+j.pos+'</b> · '+j.liga+(sinPartido?' · <span style="color:var(--red)">Sin partido esta jornada</span>':'')+'</div></div>'
       +'<div style="width:42px;display:flex;justify-content:center">'+getTeamLogo(j)+'</div>'
       +'<div class="p-rt"><div class="p-price">'+j.p+'M</div>'
       +'<div class="p-rat">★ '+j.r+'</div>'
