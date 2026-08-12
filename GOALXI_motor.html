@@ -105,6 +105,7 @@ h1{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:900;colo
   <button class="btn" onclick="startMotor()">▶️ Iniciar motor</button>
   <button class="btn red" onclick="stopMotor()">⏹ Detener motor</button>
   <button class="btn" onclick="cargarJugadoresAPI()">⬇️ Cargar jugadores desde API</button>
+  <button class="btn" onclick="cargarEquiposDestacados()">🌍 Cargar clubes destacados</button>
   <button class="btn secondary" onclick="revisarBajas()">🔔 Revisar bajas y avisar</button>
   <button class="btn secondary" onclick="actualizarEquiposActivos()">🗓️ Actualizar equipos activos</button>
   <button class="btn secondary" onclick="sincronizarPartidosJornada()">🏟️ Sincronizar partidos a la app</button>
@@ -166,6 +167,14 @@ const LIGAS = [
   {id:262, nombre:'Liga MX',     key:'LigaMX',     temporada:2026},
   {id:253, nombre:'MLS',         key:'MLS',        temporada:2026},
   {id:772, nombre:'Leagues Cup', key:'LeaguesCup', temporada:2026},
+  {id:135, nombre:'Serie A',              key:'RestoMundo', temporada:2025},
+  {id:78,  nombre:'Bundesliga',           key:'RestoMundo', temporada:2025},
+  {id:94,  nombre:'Primeira Liga',        key:'RestoMundo', temporada:2025},
+  {id:39,  nombre:'Premier League',       key:'RestoMundo', temporada:2025},
+  {id:61,  nombre:'Ligue 1',              key:'RestoMundo', temporada:2025},
+  {id:88,  nombre:'Eredivisie',           key:'RestoMundo', temporada:2025},
+  {id:128, nombre:'Liga Prof. Argentina', key:'RestoMundo', temporada:2026},
+  {id:71,  nombre:'Serie A Brasil',       key:'RestoMundo', temporada:2026},
 ]
 
 // SISTEMA DE PUNTOS
@@ -704,6 +713,61 @@ function calcPrecio(rating){
 
 let cargaActiva=false
 
+// Carga el roster real de UN equipo (apariciones esta temporada, con
+// respaldo de squad) y lo devuelve como array listo para insertar en
+// jugadores. Reutilizada por cargarJugadoresAPI() y cargarEquiposDestacados().
+async function cargarRosterEquipo(teamId, teamNombre, ligaTemporada, ligaDisplay){
+  const statsResponse = await apiCallAllPages('/players?team='+teamId+'&season='+ligaTemporada)
+  await new Promise(r=>setTimeout(r,300))
+
+  let jugadores = []
+  if(statsResponse&&statsResponse.length){
+    jugadores = statsResponse
+      .map(function(p){
+        const stats = (p.statistics||[]).find(function(s){
+          return s.team && s.team.id===teamId && s.games && (s.games.appearences||0)>0
+        })
+        return {p:p, stats:stats}
+      })
+      .filter(function(x){ return !!x.stats })
+      .map(function(x){
+        const p=x.p, stats=x.stats
+        const rating = stats.games.rating ? Math.round(parseFloat(stats.games.rating)*10) : 75
+        return {
+          nombre: p.player.name,
+          posicion: mapPos(stats.games.position),
+          equipo: teamNombre,
+          liga: ligaDisplay,
+          precio: calcPrecio(rating),
+          rating: rating,
+          api_id: p.player.id,
+          foto_url: p.player.photo||null
+        }
+      })
+  }
+
+  if(jugadores.length===0){
+    const squadData = await apiCall('/players/squads?team='+teamId)
+    await new Promise(r=>setTimeout(r,500))
+    if(squadData&&squadData.response&&squadData.response.length&&squadData.response[0].players){
+      jugadores = squadData.response[0].players.map(function(p){
+        return {
+          nombre: p.name,
+          posicion: mapPos(p.position),
+          equipo: teamNombre,
+          liga: ligaDisplay,
+          precio: calcPrecio(75),
+          rating: 75,
+          api_id: p.id,
+          foto_url: p.photo||null
+        }
+      })
+      log('ℹ️ '+teamNombre+': sin partidos jugados aún, usando squad de respaldo','warn')
+    }
+  }
+  return jugadores
+}
+
 async function cargarJugadoresAPI(){
   if(cargaActiva){log('Ya hay una carga activa...','warn');return}
   cargaActiva=true
@@ -728,60 +792,7 @@ async function cargarJugadoresAPI(){
     log('✅ '+liga.nm+': '+equipos.length+' equipos encontrados')
     for(const eq of equipos){
       try{
-        // 1) FUENTE PRINCIPAL: jugadores con minutos jugados ESTA temporada.
-        // Esto es evidencia real de que juegan ahí ahora — no depende de que
-        // API-Football haya actualizado su lista administrativa de "squad".
-        const statsResponse = await apiCallAllPages('/players?team='+eq.id+'&season='+liga.temporada)
-        await new Promise(r=>setTimeout(r,300))
-
-        let jugadores = []
-        if(statsResponse&&statsResponse.length){
-          jugadores = statsResponse
-            .map(function(p){
-              // Buscar, entre TODAS las entradas de statistics, la que corresponde a este equipo
-              const stats = (p.statistics||[]).find(function(s){
-                return s.team && s.team.id===eq.id && s.games && (s.games.appearences||0)>0
-              })
-              return {p:p, stats:stats}
-            })
-            .filter(function(x){ return !!x.stats })
-            .map(function(x){
-              const p=x.p, stats=x.stats
-              const rating = stats.games.rating ? Math.round(parseFloat(stats.games.rating)*10) : 75
-              return {
-                nombre: p.player.name,
-                posicion: mapPos(stats.games.position),
-                equipo: eq.nm,
-                liga: liga.nm,
-                precio: calcPrecio(rating),
-                rating: rating,
-                api_id: p.player.id,
-                foto_url: p.player.photo||null
-              }
-            })
-        }
-
-        // 2) RESPALDO: si el equipo aún no tiene partidos jugados esta temporada
-        // (torneo recién empezando), caemos a /players/squads
-        if(jugadores.length===0){
-          const squadData = await apiCall('/players/squads?team='+eq.id)
-          await new Promise(r=>setTimeout(r,500))
-          if(squadData&&squadData.response&&squadData.response.length&&squadData.response[0].players){
-            jugadores = squadData.response[0].players.map(function(p){
-              return {
-                nombre: p.name,
-                posicion: mapPos(p.position),
-                equipo: eq.nm,
-                liga: liga.nm,
-                precio: calcPrecio(75),
-                rating: 75,
-                api_id: p.id,
-                foto_url: p.photo||null
-              }
-            })
-            log('ℹ️ '+eq.nm+': sin partidos jugados aún, usando squad de respaldo','warn')
-          }
-        }
+        const jugadores = await cargarRosterEquipo(eq.id, eq.nm, liga.temporada, liga.nm)
 
         if(jugadores.length>0){
           for(let i=0;i<jugadores.length;i+=20){
@@ -803,6 +814,65 @@ async function cargarJugadoresAPI(){
   log('✅ CARGA COMPLETA: '+totalCargados+' jugadores guardados')
   log('═══════════════════════════')
   cargaActiva=false
+}
+
+// ══════════ CLUBES DESTACADOS (RESTO DEL MUNDO) ══════════
+// Lista curada a mano — solo clubes puntuales, no ligas completas.
+// IDs verificados uno por uno contra la API (no adivinados).
+const EQUIPOS_DESTACADOS = [
+  {id:496, nm:'Juventus',            temporada:2025},
+  {id:119, nm:'Inter',               temporada:2025},
+  {id:489, nm:'AC Milan',            temporada:2025},
+  {id:157, nm:'Bayern Munich',       temporada:2025},
+  {id:165, nm:'Borussia Dortmund',   temporada:2025},
+  {id:173, nm:'RB Leipzig',          temporada:2025},
+  {id:211, nm:'Benfica',             temporada:2025},
+  {id:212, nm:'FC Porto',            temporada:2025},
+  {id:228, nm:'Sporting CP',         temporada:2025},
+  {id:50,  nm:'Manchester City',     temporada:2025},
+  {id:33,  nm:'Manchester United',   temporada:2025},
+  {id:40,  nm:'Liverpool',           temporada:2025},
+  {id:42,  nm:'Arsenal',             temporada:2025},
+  {id:85,  nm:'Paris Saint Germain', temporada:2025},
+  {id:81,  nm:'Marseille',           temporada:2025},
+  {id:80,  nm:'Lyon',                temporada:2025},
+  {id:451, nm:'Boca Juniors',        temporada:2026},
+  {id:435, nm:'River Plate',         temporada:2026},
+  {id:127, nm:'Flamengo',            temporada:2026},
+  {id:194, nm:'Ajax',                temporada:2025},
+]
+
+let cargandoDestacados=false
+
+async function cargarEquiposDestacados(){
+  if(cargandoDestacados){log('Ya hay una carga activa...','warn');return}
+  cargandoDestacados=true
+  let totalCargados=0
+  log('═══ CARGANDO CLUBES DESTACADOS (RESTO DEL MUNDO) ═══')
+
+  for(const eq of EQUIPOS_DESTACADOS){
+    try{
+      const jugadores = await cargarRosterEquipo(eq.id, eq.nm, eq.temporada, 'RestoMundo')
+      if(jugadores.length>0){
+        // upsert por api_id — no borra nada existente, solo actualiza/agrega
+        for(let i=0;i<jugadores.length;i+=20){
+          await sb.from('jugadores').upsert(jugadores.slice(i,i+20),{onConflict:'api_id'})
+        }
+        totalCargados+=jugadores.length
+        log('✅ '+eq.nm+': '+jugadores.length+' jugadores')
+      } else {
+        log('⚠️ '+eq.nm+': sin datos','warn')
+      }
+    }catch(e){
+      log('Error '+eq.nm+': '+e.message,'err')
+    }
+    await new Promise(r=>setTimeout(r,3000))
+  }
+
+  log('═══════════════════════════')
+  log('✅ CLUBES DESTACADOS: '+totalCargados+' jugadores guardados')
+  log('═══════════════════════════')
+  cargandoDestacados=false
 }
 
 // ══════════ REVISAR BAJAS Y NOTIFICAR ══════════
