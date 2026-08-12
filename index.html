@@ -790,6 +790,14 @@ async function loadPlayersFromDB(){
       log_db('Sin jugadores en DB, usando locales')
       return false
     }
+    // Excluir jugadores de equipos deshabilitados por el admin
+    try{
+      const{data:deshabilitados}=await sb.from('equipos_disponibles').select('equipo').eq('habilitado',false)
+      if(deshabilitados&&deshabilitados.length){
+        const excluidos=new Set(deshabilitados.map(function(e){return e.equipo}))
+        todos=todos.filter(function(j){return !excluidos.has(j.equipo)})
+      }
+    }catch(e){}
     // Convertir formato DB al formato que usa la app
     PLAYERS_DB=todos.map(function(j){
       return {
