@@ -433,7 +433,6 @@ html,body{height:100%;background:var(--bg);font-family:'Barlow',sans-serif;color
       <div class="liga-chip on" onclick="selLigaHome(this,'LaLiga')">🇪🇸 LaLiga</div>
       <div class="liga-chip" onclick="selLigaHome(this,'LigaMX')">🇲🇽 Liga MX</div>
       <div class="liga-chip" onclick="selLigaHome(this,'MLS')">🇺🇸 MLS</div>
-      <div class="liga-chip" onclick="selLigaHome(this,'LeaguesCup')">🏆 Leagues Cup</div>
       <div class="liga-chip" onclick="selLigaHome(this,'RestoMundo')">🌍 Resto del Mundo</div>
     </div>
     <div class="sec-ttl" style="margin-top:4px;display:flex;justify-content:space-between;align-items:center">
@@ -1526,6 +1525,16 @@ async function cargarPartidosHome(liga){
     .select('*')
     .eq('liga',liga)
     .order('fecha',{ascending:true})
+
+  // Solo mostrar partidos entre equipos habilitados por el admin
+  if(data&&data.length){
+    const{data:deshabilitados}=await sb.from('equipos_disponibles').select('equipo').eq('habilitado',false)
+    if(deshabilitados&&deshabilitados.length){
+      const excluidos=new Set(deshabilitados.map(function(e){return e.equipo}))
+      data=data.filter(function(p){return !excluidos.has(p.local)&&!excluidos.has(p.visitante)})
+    }
+  }
+
   if(FILTRO_FECHA==='hoy'&&data){
     const hoyStr=new Date().toDateString()
     data=data.filter(function(p){return new Date(p.fecha).toDateString()===hoyStr})
