@@ -148,9 +148,10 @@ const sb = supabase.createClient(SB_URL, SB_KEY)
 
 // LIGAS DEL TORNEO
 const LIGAS = [
-  {id:140, nombre:'LaLiga',    key:'LaLiga',  temporada:2025},
-  {id:262, nombre:'Liga MX',   key:'LigaMX',  temporada:2026},
-  {id:253, nombre:'MLS',       key:'MLS',     temporada:2026},
+  {id:140, nombre:'LaLiga',      key:'LaLiga',     temporada:2025},
+  {id:262, nombre:'Liga MX',     key:'LigaMX',     temporada:2026},
+  {id:253, nombre:'MLS',         key:'MLS',        temporada:2026},
+  {id:772, nombre:'Leagues Cup', key:'LeaguesCup', temporada:2026},
 ]
 
 // SISTEMA DE PUNTOS
@@ -899,7 +900,7 @@ async function actualizarEquiposActivos(){
 
   const equiposActivos=[] // {equipo, liga}
 
-  for(const liga of LIGAS_CONFIG){
+  for(const liga of LIGAS){
     const temporadas=[liga.temporada, liga.temporada+1]
     const equiposSet=new Set()
     let totalPartidos=0
@@ -915,11 +916,11 @@ async function actualizarEquiposActivos(){
       }
     }
     if(!equiposSet.size){
-      log('⚠️ Sin fixtures para '+liga.nm,'warn')
+      log('⚠️ Sin fixtures para '+liga.nombre,'warn')
       continue
     }
-    equiposSet.forEach(function(nm){equiposActivos.push({equipo:nm,liga:liga.nm})})
-    log('✅ '+liga.nm+': '+equiposSet.size+' equipos con partido esta semana ('+totalPartidos+' partidos)')
+    equiposSet.forEach(function(nm){equiposActivos.push({equipo:nm,liga:liga.key})})
+    log('✅ '+liga.nombre+': '+equiposSet.size+' equipos con partido esta semana ('+totalPartidos+' partidos)')
   }
 
   if(!equiposActivos.length){
