@@ -107,6 +107,7 @@ h1{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:900;colo
   <button class="btn" onclick="cargarJugadoresAPI()">⬇️ Cargar jugadores desde API</button>
   <button class="btn secondary" onclick="revisarBajas()">🔔 Revisar bajas y avisar</button>
   <button class="btn secondary" onclick="actualizarEquiposActivos()">🗓️ Actualizar equipos activos</button>
+  <button class="btn secondary" onclick="sincronizarPartidosJornada()">🏟️ Sincronizar partidos a la app</button>
   <button class="btn secondary" onclick="simularEvento()">🎲 Simular evento</button>
 </div>
 
@@ -147,10 +148,9 @@ const sb = supabase.createClient(SB_URL, SB_KEY)
 
 // LIGAS DEL TORNEO
 const LIGAS = [
-  {id:140, nombre:'LaLiga',    temporada:2025},
-  {id:262, nombre:'Liga MX',   temporada:2026},
-  {id:128, nombre:'Argentina', temporada:2026},
-  {id:71,  nombre:'Brasil',    temporada:2026},
+  {id:140, nombre:'LaLiga',    key:'LaLiga',  temporada:2025},
+  {id:262, nombre:'Liga MX',   key:'LigaMX',  temporada:2026},
+  {id:253, nombre:'MLS',       key:'MLS',     temporada:2026},
 ]
 
 // SISTEMA DE PUNTOS
@@ -240,6 +240,53 @@ async function testAPI() {
   setStatus('api', 'green', 'API-Football: Conectada · ' + plan + ' · ' + remaining + '/' + limit + ' requests')
   log('✅ API conectada. Plan: ' + plan, 'info')
   log('Requests hoy: ' + remaining + ' / ' + limit, 'info')
+}
+
+// SINCRONIZAR PARTIDOS A LA APP (Supabase)
+// A diferencia de fetchPartidos (que es solo para el motor de puntos y
+// mira "hoy"), esto trae toda la ventana de la jornada (7 días) y la
+// guarda en Supabase para que index.html la muestre con marcador real.
+async function sincronizarPartidosJornada(){
+  log('🏟️ Sincronizando partidos de la jornada a la app...')
+  const hoy=new Date()
+  const en7dias=new Date(hoy.getTime()+7*24*60*60*1000)
+  const desde=fechaISO(hoy)
+  const hasta=fechaISO(en7dias)
+
+  const todosPartidos=[]
+  for(const liga of LIGAS){
+    const temporadas=[liga.temporada, liga.temporada+1]
+    for(const temp of temporadas){
+      const data=await apiCall('/fixtures?league='+liga.id+'&season='+temp+'&from='+desde+'&to='+hasta)
+      await new Promise(r=>setTimeout(r,400))
+      if(data&&data.response){
+        data.response.forEach(function(p){
+          todosPartidos.push({
+            fixture_id: p.fixture.id,
+            liga: liga.key,
+            local: p.teams.home.name,
+            visitante: p.teams.away.name,
+            goles_local: p.goals.home||0,
+            goles_visita: p.goals.away||0,
+            estado: p.fixture.status.short,
+            minuto: p.fixture.status.elapsed,
+            fecha: p.fixture.date,
+            updated_at: new Date().toISOString()
+          })
+        })
+      }
+    }
+  }
+
+  if(!todosPartidos.length){
+    log('⚠️ Sin partidos encontrados esta jornada','warn')
+    return
+  }
+
+  for(let i=0;i<todosPartidos.length;i+=20){
+    await sb.from('partidos_jornada').upsert(todosPartidos.slice(i,i+20),{onConflict:'fixture_id'})
+  }
+  log('✅ '+todosPartidos.length+' partidos sincronizados a la app')
 }
 
 // CARGAR PARTIDOS HOY
@@ -343,6 +390,9 @@ function stopMotor() {
 async function procesarEventos() {
   log('🔄 Procesando eventos...')
   setStatus('motor', 'green', 'Motor activo · Procesando...')
+
+  // Mantener los marcadores de la app actualizados en cada ciclo
+  await sincronizarPartidosJornada()
   
   // Si no hay partidos en vivo, buscarlos
   if (!partidosActivos.length) {
