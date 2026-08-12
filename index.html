@@ -1487,75 +1487,61 @@ async function doForgot(){
   if(error)toast('Error: '+xlate(error.message),'err')
   else toast('✅ Revisa tu email para restablecer','ok')
 }
-// LIGAS HOME
-const PARTIDOS={
-  LaLiga:[
-    {l:'Real Madrid',v:'Barcelona',f:'Sáb 14 Abr · 16:00',live:true,min:"67'"},
-    {l:'Atlético',v:'Sevilla',f:'Sáb 14 Abr · 18:15',live:false,min:''},
-    {l:'Valencia',v:'Betis',f:'Dom 15 Abr · 14:00',live:false,min:''},
-  ],
-  LigaMX:[
-    {l:'América',v:'Chivas',f:'Sáb 14 Abr · 20:00',live:false,min:''},
-    {l:'Rayados',v:'Cruz Azul',f:'Dom 15 Abr · 17:00',live:false,min:''},
-    {l:'Pumas',v:'Santos',f:'Dom 15 Abr · 19:00',live:false,min:''},
-  ],
-  Argentina:[
-    {l:'Boca Juniors',v:'River Plate',f:'Sáb 14 Abr · 21:00',live:false,min:''},
-    {l:'Racing',v:'Independiente',f:'Dom 15 Abr · 15:30',live:false,min:''},
-  ],
-  Brasil:[
-    {l:'Flamengo',v:'Palmeiras',f:'Sáb 14 Abr · 19:00',live:false,min:''},
-    {l:'São Paulo',v:'Corinthians',f:'Dom 15 Abr · 16:00',live:false,min:''},
-  ],
-  MLS:[
-    {l:'Inter Miami',v:'LA Galaxy',f:'Sáb 14 Abr · 19:30',live:false,min:''},
-    {l:'Columbus',v:'Chicago Fire',f:'Sáb 14 Abr · 17:00',live:false,min:''},
-    {l:'Nashville',v:'FC Cincinnati',f:'Dom 15 Abr · 15:30',live:false,min:''},
-    {l:'New England',v:'Philadelphia',f:'Dom 15 Abr · 13:00',live:false,min:''},
-  ]
-}
-function selLigaHome(el,liga){
-  document.querySelectorAll('.liga-chip').forEach(function(c){c.classList.remove('on')})
-  el.classList.add('on')
-  renderPartidos(liga)
-}
-function renderPartidos(liga){
+// LIGAS HOME — partidos reales desde Supabase (sincronizados por el motor)
+let PARTIDOS_LIGA_ACTUAL='LaLiga'
+async function cargarPartidosHome(liga){
   const c=document.getElementById('home-partidos')
   if(!c)return
-  const ps=PARTIDOS[liga]||[]
+  const{data}=await sb.from('partidos_jornada')
+    .select('*')
+    .eq('liga',liga)
+    .order('fecha',{ascending:true})
   c.innerHTML=''
-  ps.forEach(function(p){
+  if(!data||!data.length){
+    c.innerHTML='<div style="color:var(--t3);font-size:13px;padding:12px 0">Sin partidos programados esta jornada.</div>'
+    return
+  }
+  const ENVIVO=['1H','HT','2H','ET','BT','P','LIVE']
+  data.forEach(function(p){
+    const live=ENVIVO.indexOf(p.estado)!==-1
+    const finalizado=p.estado==='FT'||p.estado==='AET'||p.estado==='PEN'
     const card=document.createElement('div')
-    card.style.cssText='background:var(--card);border:1px solid '+(p.live?'var(--red)':'var(--b2)')+';border-radius:14px;padding:12px 14px;margin-bottom:8px'
+    card.style.cssText='background:var(--card);border:1px solid '+(live?'var(--red)':'var(--b2)')+';border-radius:14px;padding:12px 14px;margin-bottom:8px'
     const top=document.createElement('div')
     top.style.cssText='display:flex;justify-content:space-between;margin-bottom:6px'
     const est=document.createElement('span')
-    est.style.cssText='font-size:11px;font-weight:700;color:'+(p.live?'var(--red)':'var(--t3)')
-    est.textContent=p.live?('🔴 EN VIVO · '+p.min):'⏳ Próximo'
+    est.style.cssText='font-size:11px;font-weight:700;color:'+(live?'var(--red)':'var(--t3)')
+    est.textContent=live?('🔴 EN VIVO · '+(p.minuto||0)+"'"):finalizado?'✅ Finalizado':'⏳ Próximo'
     const fecha=document.createElement('span')
     fecha.style.cssText='font-size:11px;color:var(--t3)'
-    fecha.textContent=p.f
+    fecha.textContent=new Date(p.fecha).toLocaleString('es-MX',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
     top.appendChild(est);top.appendChild(fecha)
     const row=document.createElement('div')
     row.style.cssText='display:flex;align-items:center'
     const local=document.createElement('span')
     local.style.cssText='font-size:16px;font-weight:800;flex:1'
-    local.textContent=p.l
-    const vs=document.createElement('span')
-    vs.style.cssText='font-size:12px;color:var(--t3);padding:0 8px'
-    vs.textContent='VS'
+    local.textContent=p.local
+    const marcador=document.createElement('span')
+    marcador.style.cssText='font-size:16px;font-weight:900;color:var(--g);padding:0 8px'
+    marcador.textContent=(live||finalizado)?(p.goles_local+' - '+p.goles_visita):'VS'
     const visit=document.createElement('span')
     visit.style.cssText='font-size:16px;font-weight:800;flex:1;text-align:right'
-    visit.textContent=p.v
-    row.appendChild(local);row.appendChild(vs);row.appendChild(visit)
+    visit.textContent=p.visitante
+    row.appendChild(local);row.appendChild(marcador);row.appendChild(visit)
     card.appendChild(top);card.appendChild(row)
     c.appendChild(card)
   })
 }
-
+function selLigaHome(el,liga){
+  document.querySelectorAll('.liga-chip').forEach(function(c){c.classList.remove('on')})
+  el.classList.add('on')
+  PARTIDOS_LIGA_ACTUAL=liga
+  cargarPartidosHome(liga)
+}
+setInterval(function(){cargarPartidosHome(PARTIDOS_LIGA_ACTUAL)},30000)
 
 init()
-renderPartidos('LaLiga')
+cargarPartidosHome('LaLiga')
 </script>
 </body>
 </html>
