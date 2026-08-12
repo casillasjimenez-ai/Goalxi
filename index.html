@@ -435,7 +435,13 @@ html,body{height:100%;background:var(--bg);font-family:'Barlow',sans-serif;color
       <div class="liga-chip" onclick="selLigaHome(this,'MLS')">🇺🇸 MLS</div>
       <div class="liga-chip" onclick="selLigaHome(this,'LeaguesCup')">🏆 Leagues Cup</div>
     </div>
-    <div class="sec-ttl" style="margin-top:4px">Partidos de la jornada</div>
+    <div class="sec-ttl" style="margin-top:4px;display:flex;justify-content:space-between;align-items:center">
+      <span>Partidos de la jornada</span>
+      <div style="display:flex;gap:6px">
+        <div class="liga-chip on" id="filtro-todos" onclick="setFiltroFecha('todos')" style="padding:5px 10px;font-size:11px">Todos</div>
+        <div class="liga-chip" id="filtro-hoy" onclick="setFiltroFecha('hoy')" style="padding:5px 10px;font-size:11px">Hoy</div>
+      </div>
+    </div>
     <div id="home-partidos" style="padding:0 20px 20px"></div>
   </div>
 </div>
@@ -1490,16 +1496,27 @@ async function doForgot(){
 }
 // LIGAS HOME — partidos reales desde Supabase (sincronizados por el motor)
 let PARTIDOS_LIGA_ACTUAL='LaLiga'
+let FILTRO_FECHA='todos'
+function setFiltroFecha(f){
+  FILTRO_FECHA=f
+  document.getElementById('filtro-todos').classList.toggle('on',f==='todos')
+  document.getElementById('filtro-hoy').classList.toggle('on',f==='hoy')
+  cargarPartidosHome(PARTIDOS_LIGA_ACTUAL)
+}
 async function cargarPartidosHome(liga){
   const c=document.getElementById('home-partidos')
   if(!c)return
-  const{data}=await sb.from('partidos_jornada')
+  let{data}=await sb.from('partidos_jornada')
     .select('*')
     .eq('liga',liga)
     .order('fecha',{ascending:true})
+  if(FILTRO_FECHA==='hoy'&&data){
+    const hoyStr=new Date().toDateString()
+    data=data.filter(function(p){return new Date(p.fecha).toDateString()===hoyStr})
+  }
   c.innerHTML=''
   if(!data||!data.length){
-    c.innerHTML='<div style="color:var(--t3);font-size:13px;padding:12px 0">Sin partidos programados esta jornada.</div>'
+    c.innerHTML='<div style="color:var(--t3);font-size:13px;padding:12px 0">'+(FILTRO_FECHA==='hoy'?'Sin partidos hoy.':'Sin partidos programados esta jornada.')+'</div>'
     return
   }
   const ENVIVO=['1H','HT','2H','ET','BT','P','LIVE']
@@ -1518,23 +1535,23 @@ async function cargarPartidosHome(liga){
     fecha.textContent=new Date(p.fecha).toLocaleString('es-MX',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
     top.appendChild(est);top.appendChild(fecha)
     const row=document.createElement('div')
-    row.style.cssText='display:flex;align-items:center'
-    const local=document.createElement('span')
-    local.style.cssText='font-size:16px;font-weight:800;flex:1'
-    local.textContent=p.local
+    row.style.cssText='display:flex;align-items:center;gap:8px'
+    const local=document.createElement('div')
+    local.style.cssText='display:flex;align-items:center;gap:8px;flex:1'
+    local.innerHTML=getTeamLogo({eq:p.local})+'<span style="font-size:16px;font-weight:800">'+p.local+'</span>'
     const marcador=document.createElement('span')
-    marcador.style.cssText='font-size:16px;font-weight:900;color:var(--g);padding:0 8px'
+    marcador.style.cssText='font-size:16px;font-weight:900;color:var(--g);padding:0 8px;flex-shrink:0'
     marcador.textContent=(live||finalizado)?(p.goles_local+' - '+p.goles_visita):'VS'
-    const visit=document.createElement('span')
-    visit.style.cssText='font-size:16px;font-weight:800;flex:1;text-align:right'
-    visit.textContent=p.visitante
+    const visit=document.createElement('div')
+    visit.style.cssText='display:flex;align-items:center;gap:8px;flex:1;justify-content:flex-end'
+    visit.innerHTML='<span style="font-size:16px;font-weight:800">'+p.visitante+'</span>'+getTeamLogo({eq:p.visitante})
     row.appendChild(local);row.appendChild(marcador);row.appendChild(visit)
     card.appendChild(top);card.appendChild(row)
     c.appendChild(card)
   })
 }
 function selLigaHome(el,liga){
-  document.querySelectorAll('.liga-chip').forEach(function(c){c.classList.remove('on')})
+  document.querySelectorAll('.liga-row .liga-chip').forEach(function(c){c.classList.remove('on')})
   el.classList.add('on')
   PARTIDOS_LIGA_ACTUAL=liga
   cargarPartidosHome(liga)
