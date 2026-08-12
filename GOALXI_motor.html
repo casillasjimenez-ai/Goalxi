@@ -131,6 +131,20 @@ h1{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:900;colo
   <div id="ranking-list"><div style="color:var(--t3);font-size:13px">El ranking se actualizará automáticamente con cada evento.</div></div>
 </div>
 
+<!-- GESTION DE EQUIPOS -->
+<div class="card">
+  <div class="card-title">Equipos disponibles en la app</div>
+  <button class="btn secondary" onclick="sincronizarListaEquipos()">🔄 Sincronizar lista de equipos</button>
+  <input class="btn secondary" id="eq-filtro" placeholder="🔍 Filtrar por nombre..." oninput="renderGestionEquipos()" style="cursor:text;text-align:left;color:var(--t1);width:100%;margin-top:8px">
+  <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap" id="eq-liga-filtros">
+    <div class="btn secondary" onclick="setLigaGestion('all',this)" style="padding:8px 14px;font-size:13px">Todas</div>
+    <div class="btn secondary" onclick="setLigaGestion('LaLiga',this)" style="padding:8px 14px;font-size:13px">LaLiga</div>
+    <div class="btn secondary" onclick="setLigaGestion('LigaMX',this)" style="padding:8px 14px;font-size:13px">Liga MX</div>
+    <div class="btn secondary" onclick="setLigaGestion('MLS',this)" style="padding:8px 14px;font-size:13px">MLS</div>
+  </div>
+  <div id="eq-lista" style="margin-top:12px;max-height:400px;overflow-y:auto"></div>
+</div>
+
 <!-- LOG -->
 <div class="card">
   <div class="card-title">Log del sistema</div>
@@ -944,6 +958,90 @@ log('Sistema GOALXI Motor v1.0 iniciado')
 log('Supabase: ' + SB_URL, 'info')
 log('API-Football: ' + API_URL, 'info')
 log('Listo. Toca "Probar API" para verificar conexión.')
+
+// ══════════ GESTIÓN DE EQUIPOS DISPONIBLES ══════════
+let EQUIPOS_GESTION=[] // {equipo, liga, habilitado}
+let ligaGestionActual='all'
+
+// Trae los equipos distintos que ya tienes en jugadores, y los agrega a
+// equipos_disponibles como habilitados por defecto SI no existían ya
+// (no pisa configuraciones previas — solo agrega los que falten).
+async function sincronizarListaEquipos(){
+  log('Sincronizando lista de equipos...')
+  const{data:jugs}=await sb.from('jugadores').select('equipo,liga')
+  if(!jugs||!jugs.length){log('No hay jugadores cargados todavía','warn');return}
+
+  const vistos={}
+  jugs.forEach(function(j){vistos[j.equipo]=j.liga})
+
+  const{data:existentes}=await sb.from('equipos_disponibles').select('equipo')
+  const yaExisten=new Set((existentes||[]).map(function(e){return e.equipo}))
+
+  const nuevos=Object.keys(vistos)
+    .filter(function(eq){return !yaExisten.has(eq)})
+    .map(function(eq){return {equipo:eq, liga:vistos[eq], habilitado:true}})
+
+  if(nuevos.length){
+    for(let i=0;i<nuevos.length;i+=20){
+      await sb.from('equipos_disponibles').insert(nuevos.slice(i,i+20))
+    }
+    log('✅ '+nuevos.length+' equipos nuevos agregados (habilitados por defecto)')
+  } else {
+    log('✅ La lista ya estaba al día, sin equipos nuevos')
+  }
+  await cargarGestionEquipos()
+}
+
+async function cargarGestionEquipos(){
+  const{data}=await sb.from('equipos_disponibles').select('*').order('equipo')
+  EQUIPOS_GESTION=data||[]
+  renderGestionEquipos()
+}
+
+function setLigaGestion(liga,el){
+  ligaGestionActual=liga
+  document.querySelectorAll('#eq-liga-filtros .btn').forEach(function(b){
+    b.style.borderColor='var(--b2)';b.style.color='var(--t2)'
+  })
+  el.style.borderColor='var(--g)';el.style.color='var(--g)'
+  renderGestionEquipos()
+}
+
+function renderGestionEquipos(){
+  const filtro=(document.getElementById('eq-filtro').value||'').toLowerCase()
+  const c=document.getElementById('eq-lista')
+  const lista=EQUIPOS_GESTION.filter(function(e){
+    if(ligaGestionActual!=='all'&&e.liga!==ligaGestionActual)return false
+    if(filtro&&e.equipo.toLowerCase().indexOf(filtro)===-1)return false
+    return true
+  })
+  c.innerHTML=''
+  if(!lista.length){
+    c.innerHTML='<div style="color:var(--t3);font-size:13px;padding:8px">Sin equipos — toca "Sincronizar lista de equipos" primero.</div>'
+    return
+  }
+  lista.forEach(function(e){
+    const row=document.createElement('div')
+    row.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg2);border-radius:10px;margin-bottom:6px'
+    const label=document.createElement('div')
+    label.innerHTML='<div style="font-size:14px;font-weight:600">'+e.equipo+'</div><div style="font-size:11px;color:var(--t3)">'+e.liga+'</div>'
+    const toggle=document.createElement('button')
+    toggle.textContent=e.habilitado?'✅ Habilitado':'🚫 Deshabilitado'
+    toggle.style.cssText='border:none;border-radius:8px;padding:8px 12px;font-family:Barlow;font-weight:700;font-size:12px;cursor:pointer;background:'+(e.habilitado?'#00FF8820':'#FF444420')+';color:'+(e.habilitado?'var(--g)':'var(--red)')
+    toggle.onclick=async function(){
+      const nuevoValor=!e.habilitado
+      toggle.disabled=true
+      await sb.from('equipos_disponibles').update({habilitado:nuevoValor}).eq('equipo',e.equipo)
+      e.habilitado=nuevoValor
+      toggle.disabled=false
+      renderGestionEquipos()
+    }
+    row.appendChild(label);row.appendChild(toggle)
+    c.appendChild(row)
+  })
+}
+
+cargarGestionEquipos()
 </script>
 </body>
 </html>
