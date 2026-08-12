@@ -434,6 +434,7 @@ html,body{height:100%;background:var(--bg);font-family:'Barlow',sans-serif;color
       <div class="liga-chip" onclick="selLigaHome(this,'LigaMX')">🇲🇽 Liga MX</div>
       <div class="liga-chip" onclick="selLigaHome(this,'MLS')">🇺🇸 MLS</div>
       <div class="liga-chip" onclick="selLigaHome(this,'LeaguesCup')">🏆 Leagues Cup</div>
+      <div class="liga-chip" onclick="selLigaHome(this,'RestoMundo')">🌍 Resto del Mundo</div>
     </div>
     <div class="sec-ttl" style="margin-top:4px;display:flex;justify-content:space-between;align-items:center">
       <span>Partidos de la jornada</span>
@@ -634,6 +635,7 @@ html,body{height:100%;background:var(--bg);font-family:'Barlow',sans-serif;color
       <div class="f-chip" onclick="setLiga(this,'LaLiga')">🇪🇸 LaLiga</div>
       <div class="f-chip" onclick="setLiga(this,'Liga MX')">🇲🇽 Liga MX</div>
       <div class="f-chip" onclick="setLiga(this,'MLS')">🇺🇸 MLS</div>
+      <div class="f-chip" onclick="setLiga(this,'RestoMundo')">🌍 Resto del Mundo</div>
     </div>
     <div class="modal-list" id="p-list"></div>
   </div>
@@ -1181,7 +1183,13 @@ const EQUIPO_TEAM_ID = {
   'Sporting Kansas City':1611,'Minnesota United FC':1612,'Columbus Crew':1613,'CF Montreal':1614,
   'DC United':1615,'Los Angeles FC':1616,'Portland Timbers':1617,'FC Cincinnati':2242,
   'Inter Miami':9568,'Nashville SC':9569,'Austin':16489,'Charlotte':18310,
-  'St. Louis City':20787,'San Diego':25484
+  'St. Louis City':20787,'San Diego':25484,
+  'Juventus':496,'Inter':119,'AC Milan':489,
+  'Bayern Munich':157,'Borussia Dortmund':165,'RB Leipzig':173,
+  'Benfica':211,'FC Porto':212,'Sporting CP':228,
+  'Manchester City':50,'Manchester United':33,'Liverpool':40,'Arsenal':42,
+  'Paris Saint Germain':85,'Marseille':81,'Lyon':80,
+  'Boca Juniors':451,'River Plate':435,'Flamengo':127,'Ajax':194
 }
 
 function getTeamLogo(j){
